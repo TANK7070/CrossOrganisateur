@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.004</title>
+<title>SmartCross - Organisateur v2.005</title>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -306,7 +306,24 @@ async function afficherUtilisateur() {
   } catch (e) { document.getElementById('google-user').textContent = '✅ Connecté à Google'; }
 }
 async function connexionGoogle() {
-  try { await driveAuth(); } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
+  try { await driveAuth(); await chargerConfigDrive(); } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
+}
+// Synchronise automatiquement les réglages (année limite, course, horaires) depuis le fichier publié :
+// un seul événement, donc une seule configuration, quel que soit le compte organisateur connecté.
+async function chargerConfigDrive() {
+  try {
+    const q = encodeURIComponent(`name='config.json' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
+    const f = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+    if (!f.files || !f.files.length) return;
+    const cfg = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.files[0].id}?alt=media`);
+    if (!cfg || !cfg.anneeLimite) return;
+    if (cfg.course) DB.course = cfg.course;
+    DB.anneeLimite = cfg.anneeLimite;
+    regenerateVagues();
+    if (Array.isArray(cfg.courses)) cfg.courses.forEach(c => { const v = DB.vagues.find(x => x.id === c.id); if (v && c.heure) v.heure = c.heure; });
+    saveDB(); renderAll();
+    driveStatus('config-drive-status', `✅ Configuration synchronisée depuis le Drive (année limite ${cfg.anneeLimite}).`, true);
+  } catch (e) { driveStatus('config-drive-status', '⚠️ Lecture de la configuration impossible : ' + e.message, false); }
 }
 function deconnexionGoogle() {
   if (!confirm('Se déconnecter ? La page va se recharger.')) return;
@@ -362,7 +379,7 @@ async function publierConfigSurDrive() {
 (function reprendreSessionDrive() {
   try {
     const saved = JSON.parse(sessionStorage.getItem('sc_org_drive_token') || 'null');
-    if (saved && saved.exp > Date.now()) { driveToken = saved.t; afficherUtilisateur(); }
+    if (saved && saved.exp > Date.now()) { driveToken = saved.t; afficherUtilisateur().then(chargerConfigDrive); }
   } catch (e) {}
 })();
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
