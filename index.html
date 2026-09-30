@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartCross - Organisateur v2.004</title>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas-pro@1/dist/html2canvas-pro.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+/* ===== 1. BASE ===== */
+* { box-sizing:border-box; }
+body { margin:0; font-family:'Segoe UI', Tahoma, Arial, sans-serif; background:#f2f4f7; color:#1f2937; }
+h1,h2,h3 { margin:0 0 .5em 0; }
+button { cursor:pointer; border:none; border-radius:6px; padding:8px 14px; font-size:.95em; background:#2563eb; color:#fff; transition:background .15s; }
+button:hover { background:#1d4ed8; }
+button.secondary { background:#6b7280; } button.secondary:hover { background:#4b5563; }
+button.danger { background:#dc2626; } button.danger:hover { background:#b91c1c; }
+button.go { background:#059669; } button.go:hover { background:#047857; }
+button.small { padding:3px 9px; font-size:.82em; }
+input, select { padding:7px 9px; border:1px solid #d1d5db; border-radius:6px; font-size:.95em; }
+table { border-collapse:collapse; width:100%; background:#fff; }
+th, td { border:1px solid #e5e7eb; padding:7px 9px; text-align:left; font-size:.88em; }
+th { background:#f3f4f6; }
+.card { background:#fff; border-radius:10px; padding:18px 20px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:12px; }
+.field { display:flex; flex-direction:column; gap:4px; }
+.field label { font-size:.8em; color:#555; font-weight:600; }
+.hint { font-size:.85em; color:#666; }
+.badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:.78em; font-weight:600; background:#dbeafe; color:#1e40af; }
+.badge.elite { background:#fef3c7; color:#92400e; }
+.badge.ok { background:#dcfce7; color:#166534; }
+.badge.warn { background:#fee2e2; color:#991b1b; }
+.scroll { max-height:480px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; }
+.warn-banner { background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:10px 14px; border-radius:8px; font-size:.85em; margin-bottom:14px; }
+tr.row-g td { background:#eff6ff; } tr.row-f td { background:#fdf2f8; }
+.chip { display:inline-block; background:#eef2ff; color:#3730a3; border-radius:16px; padding:4px 12px; font-size:.85em; margin:3px; }
+
+/* ===== 2. HEADER / NAV ===== */
+header { background:#111827; color:#fff; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+header h1 { font-size:1.3em; } header .tagline { font-size:.8em; color:#9ca3af; }
+nav { display:flex; gap:6px; background:#1f2937; padding:8px 24px 0; flex-wrap:wrap; }
+nav button.tab { background:transparent; color:#d1d5db; border-radius:8px 8px 0 0; padding:8px 16px; }
+nav button.tab.active { background:#f2f4f7; color:#111827; font-weight:600; }
+main { padding:20px 24px; max-width:1150px; margin:0 auto; }
+.section { display:none; } .section.active { display:block; }
+
+/* ===== 3. COURSE / ARRIVEE ===== */
+#video-wrap { position:relative; max-width:420px; background:#000; border-radius:10px; overflow:hidden; display:none; }
+#video-wrap video { width:100%; display:block; }
+#last-arrival { font-size:1.1em; padding:12px 14px; border-radius:10px; background:#ecfdf5; border:1px solid #a7f3d0; margin:10px 0; min-height:52px; }
+.big-input { font-size:1.3em; width:160px; }
+
+/* ===== 4. DOSSARDS (aperçu) ===== */
+#dossard-preview-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:12px; }
+.dossard-card { border:2px dashed #9ca3af; border-radius:10px; padding:10px; text-align:center; background:#fff; }
+.dossard-card .num { font-size:2.2em; font-weight:800; line-height:1; }
+.dossard-card .nom { font-weight:600; margin:4px 0; }
+.dossard-card .cat { font-size:.8em; color:#555; }
+.dossard-card .qr-box { margin:6px auto; width:90px; height:90px; }
+#pdf-stage { position:absolute; left:-12000px; top:0; }
+.pdf-page { width:794px; height:1123px; background:#fff; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(4,1fr); padding:30px; gap:0; }
+.pdf-card { border:1.5px dashed #888; margin:4px; padding:12px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:space-between; font-family:'Segoe UI', Tahoma, Arial, sans-serif; }
+.pdf-card .course { font-size:13px; color:#444; }
+.pdf-card .num { font-size:64px; font-weight:800; line-height:1; }
+.pdf-card .nom { font-size:20px; font-weight:600; }
+.pdf-card .etab { font-size:13px; color:#555; }
+.pdf-card .tag { font-size:13px; font-weight:700; color:#92400e; }
+#toast { position:fixed; bottom:20px; right:20px; background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:.9em; opacity:0; pointer-events:none; transition:opacity .25s; z-index:999; }
+#toast.show { opacity:1; }
+@media (max-width:640px) { main { padding:14px; } header { padding:12px 14px; } nav { padding:6px 14px 0; } }
+
+/* ===== 5. TRIS ===== */
+th.sortable { cursor:pointer; user-select:none; position:relative; padding-right:22px; }
+th.sortable:hover { background:#e5e7eb; }
+th.sortable::after { content:'⇅'; position:absolute; right:6px; opacity:.35; font-size:.85em; }
+th.sortable.asc::after  { content:'▲'; opacity:1; color:#2563eb; }
+th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div><h1>🏃 SmartCross — Organisateur</h1><div class="tagline">Inscriptions · Dossards · Départs · Arrivée · Classements</div></div>
+  <div style="text-align:right;">
+    <div id="course-name-display" style="font-weight:600;"></div>
+    <div id="google-user" style="font-size:.85em;margin:4px 0;">🔒 Non connecté au Drive</div>
+    <button onclick="connexionGoogle()" id="btn-google">🔐 Se connecter avec Google</button>
+    <button onclick="deconnexionGoogle()" id="btn-logout" style="display:none;">🚪 Déconnecter</button>
+  </div>
+</header>
+<nav>
+  <button class="tab active" data-tab="parametres">⚙️ Paramètres</button>
+  <button class="tab" data-tab="inscriptions">📝 Inscriptions</button>
+  <button class="tab" data-tab="dossards">🎽 Dossards</button>
+  <button class="tab" data-tab="course">🏁 Course</button>
+  <button class="tab" data-tab="classements">🏆 Classements</button>
+</nav>
+
+<main>
+
+<!-- ============ PARAMETRES ============ -->
+<section id="sec-parametres" class="section active">
+  <div class="card">
+    <h2>Course</h2>
+    <div class="row">
+      <div class="field"><label>Nom de la course</label><input id="input-course-nom" type="text" style="width:320px;" placeholder="Ex: Cross régional 2026"></div>
+      <div class="field"><label>Date</label><input id="input-course-date" type="date"></div>
+      <button onclick="saveCourseInfo()">Enregistrer</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Catégories d'âge et courses (vagues)</h2>
+    <p class="hint">Année de naissance limite du communiqué administratif (né avant = exclu). Les 4 catégories (tranches de 2 ans) et les <b>8 courses</b> (4 catégories × Garçons/Filles) en découlent ; chaque course = une vague avec son propre départ. Dans chaque course, « Élite » et « Sport pour tous » partent ensemble mais ont chacun leur classement.</p>
+    <div class="row">
+      <div class="field"><label>Année limite</label><input id="input-annee-limite" type="number" placeholder="Ex: 2008" style="width:120px;"></div>
+      <button onclick="saveAnneeLimite()">Calculer les catégories et les 8 courses</button>
+    </div>
+    <div id="categories-list"></div>
+    <div id="vagues-list"></div>
+  </div>
+  <div class="card">
+    <h2>Configuration pour les équipes</h2>
+    <p class="hint">Publiez l'année limite et les 8 courses sur le Drive partagé : les apps des équipes les liront automatiquement.</p>
+    <div class="row">
+      <button class="secondary" onclick="exportConfig()">⬇️ Exporter la configuration (JSON)</button>
+      <button onclick="publierConfigSurDrive()">☁️ Publier sur le Drive</button>
+    </div>
+    <div id="config-drive-status" style="font-size:.85em;margin-top:6px;"></div>
+  </div>
+  <div class="card">
+    <h2>Données</h2>
+    <p class="hint">Attention : la remise à zéro efface inscrits, départs et arrivées.</p>
+    <button class="danger" onclick="resetAll()">Tout effacer</button>
+  </div>
+</section>
+
+<!-- ============ INSCRIPTIONS ============ -->
+<section id="sec-inscriptions" class="section">
+  <div class="card">
+    <h2>Importer les listes des équipes</h2>
+    <p class="hint">Fichiers JSON générés par les profs accompagnateurs (SmartCross - Equipe). Clé primaire = code Massar : réimporter met à jour sans doublon.</p>
+    <div class="row">
+      <input type="file" id="import-equipes" accept=".json" multiple>
+      <button onclick="importerDepuisDrive()">🔄 Importer depuis le Drive</button>
+    </div>
+    <div id="import-report"></div>
+  </div>
+  <div class="card">
+    <h2>Ajouter un coureur manuellement</h2>
+    <div class="row">
+      <div class="field"><label>Code Massar</label><input id="ins-code" type="text" style="width:130px;"></div>
+      <div class="field"><label>Nom complet</label><input id="ins-nom" type="text" style="width:220px;"></div>
+      <div class="field"><label>Sexe</label><select id="ins-sexe"><option value="G">Garçon</option><option value="F">Fille</option></select></div>
+      <div class="field"><label>Année de naissance</label><input id="ins-annee" type="number" style="width:110px;"></div>
+      <div class="field"><label>Établissement</label><input id="ins-etab" type="text" style="width:160px;"></div>
+      <div class="field"><label>Élite</label><input id="ins-elite" type="checkbox"></div>
+      <button onclick="addCoureur()">+ Inscrire</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Coureurs inscrits (<span id="coureurs-count">0</span>)</h2>
+    <div class="row">
+      <input id="search-coureur" type="text" placeholder="Rechercher (nom, code, dossard, établissement)…" style="width:320px;" oninput="renderCoureurs()">
+      <button class="go" onclick="attribuerDossards(false)">🔢 Attribuer les dossards manquants</button>
+      <button class="secondary" onclick="attribuerDossards(true)">Renuméroter tout</button>
+      <button class="secondary" onclick="exportCoureursCSV()">⬇️ Export CSV</button>
+    </div>
+    <p class="hint">L'attribution numérote par course (ordre des vagues), puis par établissement et par nom.</p>
+    <div class="scroll"><table>
+      <thead><tr>
+        <th class="sortable" data-sort="dossard"       onclick="sortCoureursBy('dossard')">Dossard</th>
+        <th class="sortable" data-sort="codeMassar"    onclick="sortCoureursBy('codeMassar')">Code Massar</th>
+        <th class="sortable" data-sort="nomComplet"    onclick="sortCoureursBy('nomComplet')">Nom complet</th>
+        <th class="sortable" data-sort="sexe"          onclick="sortCoureursBy('sexe')">Sexe</th>
+        <th class="sortable" data-sort="annee"         onclick="sortCoureursBy('annee')">Naissance / Catégorie</th>
+        <th class="sortable" data-sort="etablissement" onclick="sortCoureursBy('etablissement')">Établissement</th>
+        <th class="sortable" data-sort="course"        onclick="sortCoureursBy('course')">Course</th>
+        <th class="sortable" data-sort="elite"         onclick="sortCoureursBy('elite')">⭐</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="coureurs-tbody"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ DOSSARDS ============ -->
+<section id="sec-dossards" class="section">
+  <div class="card">
+    <h2>Génération des dossards</h2>
+    <p class="hint">Chaque dossard : n°, nom, établissement, course, mention Élite, et QR code = code Massar (lu à l'arrivée). PDF A4, 8 dossards par page.</p>
+    <div class="row">
+      <button onclick="renderDossardPreview()">🔄 Actualiser l'aperçu</button>
+      <button class="go" onclick="generateDossardsPDF()">📄 Générer le PDF de tous les dossards</button>
+    </div>
+    <div id="dossard-warning"></div>
+  </div>
+  <div class="card"><h3>Aperçu</h3><div id="dossard-preview-grid"></div></div>
+</section>
+
+<!-- ============ COURSE (DEPARTS + ARRIVEE) ============ -->
+<section id="sec-course" class="section">
+  <div class="card">
+    <h2>Départs</h2>
+    <p class="hint">Un top départ par course (vague). Le temps de chaque coureur = heure d'arrivée − heure du top de sa vague.</p>
+    <div id="departs-list"></div>
+  </div>
+  <div class="card">
+    <h2>Ligne d'arrivée</h2>
+    <div class="row">
+      <button class="go" id="btn-scan" onclick="toggleScan()">📷 Démarrer le scan QR</button>
+      <div class="field"><label>Ou saisir le n° de dossard</label>
+        <div style="display:flex;gap:6px;"><input id="manual-dossard" class="big-input" type="number" inputmode="numeric" onkeydown="if(event.key==='Enter')arriveeManuelle()"><button onclick="arriveeManuelle()">Valider</button></div>
+      </div>
+    </div>
+    <div id="video-wrap"><video id="video" playsinline muted></video></div>
+    <canvas id="scan-canvas" style="display:none;"></canvas>
+    <div id="last-arrival">En attente de la première arrivée…</div>
+    <h3>Arrivées enregistrées (<span id="arrivees-count">0</span>)</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th><th>Saisie</th><th></th></tr></thead>
+      <tbody id="arrivees-tbody"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ CLASSEMENTS ============ -->
+<section id="sec-classements" class="section">
+  <div class="card">
+    <h2>Classements</h2>
+    <div class="row">
+      <div class="field"><label>Course</label><select id="clas-vague" onchange="renderClassements()"></select></div>
+      <button class="secondary" onclick="exportClassementsCSV()">⬇️ Export CSV (tous les classements)</button>
+    </div>
+    <div id="clas-summary" class="hint"></div>
+  </div>
+  <div class="card"><h3>⭐ Élite</h3><div id="clas-elite"></div></div>
+  <div class="card"><h3>Sport pour tous</h3><div id="clas-spt"></div></div>
+</section>
+
+</main>
+<div id="toast"></div>
+<div id="pdf-stage"></div>
+
+<script>
+/* ===================== 5. DONNEES ===================== */
+const STORAGE_KEY = 'smartCrossOrganisateurDB_v2';
+function loadDB() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) { console.error(e); }
+  return {
+    course: { nom: '', date: '' },
+    anneeLimite: null,
+    vagues: [],     // { id:'categ1_G', catId, sexe, nom, heure:'HH:MM', depart: epochMs|null }
+    coureurs: [],   // { codeMassar, dossard, nomComplet, sexe, anneeNaissance, elite, etablissement, classe }
+    arrivees: []    // { codeMassar, ts, source:'scan'|'manuel' }
+  };
+}
+let DB = loadDB();
+function saveDB() { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }
+
+/* ===================== DRIVE (lecture équipes + publication config) ===================== */
+// ID client OAuth du projet Google Cloud dédié à l'organisateur (à créer/renseigner)
+const GOOGLE_CLIENT_ID = '1067089369377-brtp5i75lt79lju0n90pf1ie9eus5omj.apps.googleusercontent.com';
+// Dossier Drive partagé "DriveCross"
+const DRIVE_FOLDER_ID = '1BLphnNEO3SOoYMvtUD__Mrbtv_-NdhkS';
+// Lecture des fichiers déposés par les équipes (comptes différents) + écriture du fichier de config
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
+let driveToken = null;
+
+function driveStatus(elId, msg, ok) {
+  const el = document.getElementById(elId);
+  el.textContent = msg; el.style.color = ok === false ? '#c0392b' : ok ? '#1e8449' : '#555';
+}
+function driveAuth() {
+  return new Promise((resolve, reject) => {
+    if (driveToken) return resolve(driveToken);
+    if (!window.google || !google.accounts) return reject(new Error('Service Google indisponible (connexion internet ?)'));
+    google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID, scope: DRIVE_SCOPE,
+      callback: r => {
+        if (r.error) return reject(new Error(r.error));
+        driveToken = r.access_token;
+        sessionStorage.setItem('sc_org_drive_token', JSON.stringify({ t: driveToken, exp: Date.now() + 3300 * 1000 }));
+        afficherUtilisateur();
+        setTimeout(() => driveToken = null, 3300 * 1000);
+        resolve(driveToken);
+      }
+    }).requestAccessToken();
+  });
+}
+async function driveFetch(url, opts) {
+  const r = await fetch(url, { ...opts, headers: { ...(opts && opts.headers), Authorization: 'Bearer ' + driveToken } });
+  if (r.status === 401) { driveToken = null; sessionStorage.removeItem('sc_org_drive_token'); }
+  if (!r.ok) throw new Error('Drive ' + r.status + ' : ' + (await r.text()).slice(0, 150));
+  return r.json();
+}
+async function afficherUtilisateur() {
+  document.getElementById('btn-google').style.display = 'none';
+  document.getElementById('btn-logout').style.display = '';
+  try {
+    const u = (await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)')).user;
+    document.getElementById('google-user').textContent = '✅ ' + u.displayName + ' (' + u.emailAddress + ')';
+  } catch (e) { document.getElementById('google-user').textContent = '✅ Connecté à Google'; }
+}
+async function connexionGoogle() {
+  try { await driveAuth(); } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
+}
+function deconnexionGoogle() {
+  if (!confirm('Se déconnecter ? La page va se recharger.')) return;
+  try { if (driveToken && window.google && google.accounts) google.accounts.oauth2.revoke(driveToken, () => {}); } catch (e) {}
+  driveToken = null;
+  sessionStorage.removeItem('sc_org_drive_token');
+  location.reload();
+}
+async function driveUpsert(name, parent, content) {
+  const q = encodeURIComponent(`name='${name}' and '${parent}' in parents and trashed=false`);
+  const found = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  if (found.files && found.files.length) {
+    return driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${found.files[0].id}?uploadType=media&supportsAllDrives=true`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content });
+  }
+  const b = 'sc' + Date.now();
+  const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parent], mimeType: 'application/json' })}\r\n--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${b}--`;
+  return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
+    { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body });
+}
+async function importerDepuisDrive() {
+  if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); return; }
+  try {
+    document.getElementById('import-report').innerHTML = 'Connexion à Google…';
+    await driveAuth();
+    document.getElementById('import-report').innerHTML = 'Lecture du dossier Drive…';
+    const q = encodeURIComponent(`'${DRIVE_FOLDER_ID}' in parents and trashed=false and mimeType='application/json' and name!='config.json'`);
+    const list = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+    const stats = { n: 0, maj: 0, excl: 0, sansSexe: 0, rep: [] };
+    for (const f of (list.files || [])) {
+      try {
+        const data = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+        traiterEquipe(data, f.name, stats);
+      } catch (err) { stats.rep.push(`${escapeHtml(f.name)} : erreur (${escapeHtml(err.message)})`); }
+    }
+    saveDB(); renderAll();
+    afficherRapportImport(stats);
+    if (!list.files || !list.files.length) showToast('Aucun fichier trouvé dans le dossier Drive');
+  } catch (e) { document.getElementById('import-report').innerHTML = `<div class="warn-banner">❌ ${escapeHtml(e.message)}</div>`; }
+}
+async function publierConfigSurDrive() {
+  if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
+  const cfg = { course: DB.course, anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
+  try {
+    driveStatus('config-drive-status', 'Connexion à Google…');
+    await driveAuth();
+    driveStatus('config-drive-status', 'Publication en cours…');
+    await driveUpsert('config.json', DRIVE_FOLDER_ID, JSON.stringify(cfg, null, 2));
+    driveStatus('config-drive-status', `✅ Configuration publiée le ${new Date().toLocaleString('fr-FR')}`, true);
+  } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
+}
+(function reprendreSessionDrive() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('sc_org_drive_token') || 'null');
+    if (saved && saved.exp > Date.now()) { driveToken = saved.t; afficherUtilisateur(); }
+  } catch (e) {}
+})();
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function beep(ok = true) {
+  try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(); const g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.frequency.value = ok ? 880 : 220; g.gain.value = .15; o.start(); o.stop(a.currentTime + (ok ? .12 : .35)); } catch (e) {}
+}
+function fmtTime(ms) { // durée -> [h:]mm:ss
+  if (ms == null || isNaN(ms)) return '—';
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const p = n => String(n).padStart(2, '0');
+  return h ? `${h}:${p(m)}:${p(ss)}` : `${p(m)}:${p(ss)}`;
+}
+function fmtClock(ts) { return new Date(ts).toLocaleTimeString('fr-FR'); }
+
+/* ===================== 6. ONGLETS ===================== */
+document.querySelectorAll('nav .tab').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('nav .tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('main .section').forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sec-' + btn.dataset.tab).classList.add('active');
+  if (btn.dataset.tab !== 'course') stopScan();
+  if (btn.dataset.tab === 'dossards') renderDossardPreview();
+  if (btn.dataset.tab === 'course') renderCourse();
+  if (btn.dataset.tab === 'classements') renderClassements();
+  if (btn.dataset.tab === 'inscriptions') renderCoureurs();
+}));
+
+/* ===================== 7. PARAMETRES : CATEGORIES + 8 VAGUES ===================== */
+function computeCategories(L) {
+  return [
+    { id:'categ1', nom:`Catég. 1 (${L}-${L+1})`, anneeMin:L, anneeMax:L+1 },
+    { id:'categ2', nom:`Catég. 2 (${L+2}-${L+3})`, anneeMin:L+2, anneeMax:L+3 },
+    { id:'categ3', nom:`Catég. 3 (${L+4}-${L+5})`, anneeMin:L+4, anneeMax:L+5 },
+    { id:'categ4', nom:`Catég. 4 (${L+6} et +)`, anneeMin:L+6, anneeMax:null }
+  ];
+}
+function getCategorieForAnnee(annee) {
+  if (!DB.anneeLimite || !annee) return null;
+  if (annee < DB.anneeLimite) return null;
+  return computeCategories(DB.anneeLimite).find(c => annee >= c.anneeMin && (c.anneeMax === null || annee <= c.anneeMax)) || null;
+}
+function regenerateVagues() {
+  const old = {}; DB.vagues.forEach(v => old[v.id] = v);
+  DB.vagues = [];
+  computeCategories(DB.anneeLimite).forEach(c => ['G', 'F'].forEach(sx => {
+    const id = `${c.id}_${sx}`;
+    DB.vagues.push({ id, catId: c.id, sexe: sx, nom: `${c.nom} — ${sx === 'G' ? 'Garçons' : 'Filles'}`,
+      heure: old[id] ? old[id].heure : '', depart: old[id] ? old[id].depart : null });
+  }));
+}
+function saveAnneeLimite() {
+  const v = parseInt(document.getElementById('input-annee-limite').value, 10);
+  if (!v || v < 1900) { showToast('Année limite invalide'); return; }
+  DB.anneeLimite = v; regenerateVagues(); saveDB(); renderAll(); showToast('Catégories et 8 courses calculées');
+}
+function saveCourseInfo() {
+  DB.course.nom = document.getElementById('input-course-nom').value.trim();
+  DB.course.date = document.getElementById('input-course-date').value;
+  saveDB(); renderAll(); showToast('Informations enregistrées');
+}
+function setHeureVague(id, val) { const v = DB.vagues.find(x => x.id === id); if (v) v.heure = val; saveDB(); }
+function renderParametres() {
+  document.getElementById('input-course-nom').value = DB.course.nom || '';
+  document.getElementById('input-course-date').value = DB.course.date || '';
+  document.getElementById('input-annee-limite').value = DB.anneeLimite || '';
+  document.getElementById('course-name-display').textContent = DB.course.nom || '';
+  const cl = document.getElementById('categories-list');
+  cl.innerHTML = DB.anneeLimite
+    ? `<p style="color:#b91c1c;font-size:.8em;margin:6px 0;">Né en ${DB.anneeLimite - 1} ou avant : exclu.</p>` + computeCategories(DB.anneeLimite).map(c => `<span class="chip">${escapeHtml(c.nom)}</span>`).join('')
+    : '<p class="hint">Définissez l\'année limite.</p>';
+  document.getElementById('vagues-list').innerHTML = DB.vagues.length
+    ? '<table style="margin-top:12px;"><thead><tr><th>#</th><th>Course (vague)</th><th>Heure de départ prévue</th><th>Inscrits</th></tr></thead><tbody>' +
+      DB.vagues.map((v, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(v.nom)}</td>
+        <td><input type="time" value="${v.heure || ''}" onchange="setHeureVague('${v.id}', this.value)"></td>
+        <td>${coureursDeVague(v.id).length}</td></tr>`).join('') + '</tbody></table>' : '';
+}
+function exportConfig() {
+  if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
+  const cfg = { course: DB.course, anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
+  dl(JSON.stringify(cfg, null, 2), (DB.course.nom || 'SmartCross') + '_Config.json', 'application/json');
+}
+function resetAll() {
+  if (!confirm('Tout effacer (inscrits, départs, arrivées) ?')) return;
+  if (!confirm('Vraiment ? Cette action est définitive.')) return;
+  localStorage.removeItem(STORAGE_KEY); DB = loadDB(); renderAll(); showToast('Données effacées');
+}
+function dl(content, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: type + ';charset=utf-8' })); a.download = filename; a.click();
+}
+
+/* ===================== 8. INSCRIPTIONS ===================== */
+function catOf(c) { return getCategorieForAnnee(c.anneeNaissance); }
+function vagueIdOf(c) { const cat = catOf(c); return cat && c.sexe ? `${cat.id}_${c.sexe}` : null; }
+function vagueOf(c) { const id = vagueIdOf(c); return id ? DB.vagues.find(v => v.id === id) || null : null; }
+function coureursDeVague(id) { return DB.coureurs.filter(c => vagueIdOf(c) === id); }
+function findByCode(code) { return DB.coureurs.find(c => c.codeMassar === code); }
+function findByDossard(n) { return DB.coureurs.find(c => c.dossard === n); }
+
+function addCoureur() {
+  const code = document.getElementById('ins-code').value.trim();
+  const nom = document.getElementById('ins-nom').value.trim();
+  const sexe = document.getElementById('ins-sexe').value;
+  const annee = parseInt(document.getElementById('ins-annee').value, 10);
+  const etab = document.getElementById('ins-etab').value.trim();
+  const elite = document.getElementById('ins-elite').checked;
+  if (!code || !nom || !annee) { showToast('Code Massar, nom et année de naissance requis'); return; }
+  if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); return; }
+  if (!getCategorieForAnnee(annee)) { showToast(`Exclu : né en ${annee} (limite ${DB.anneeLimite})`); return; }
+  upsertCoureur({ codeMassar: code, nomComplet: nom, sexe, anneeNaissance: annee, elite, etablissement: etab, classe: '' });
+  saveDB(); ['ins-code','ins-nom','ins-annee'].forEach(i => document.getElementById(i).value = ''); document.getElementById('ins-elite').checked = false;
+  renderAll(); showToast('Coureur inscrit');
+}
+function upsertCoureur(p) {
+  const ex = findByCode(p.codeMassar);
+  if (ex) { Object.assign(ex, p, { dossard: ex.dossard }); return 'maj'; }
+  DB.coureurs.push({ ...p, dossard: null }); return 'new';
+}
+function deleteCoureur(code) {
+  if (!confirm('Supprimer ce coureur (et ses arrivées) ?')) return;
+  DB.coureurs = DB.coureurs.filter(c => c.codeMassar !== code);
+  DB.arrivees = DB.arrivees.filter(a => a.codeMassar !== code);
+  saveDB(); renderAll();
+}
+function toggleEliteCoureur(code, v) { const c = findByCode(code); if (c) c.elite = v; saveDB(); renderCoureurs(); }
+
+function traiterEquipe(data, label, stats) {
+  if (!Array.isArray(data.participants)) { stats.rep.push(`${escapeHtml(label)} : erreur (format inattendu)`); return; }
+  let fn = 0;
+  data.participants.forEach(p => {
+    if (!p.codeMassar) return;
+    if (!getCategorieForAnnee(p.anneeNaissance)) { stats.excl++; return; }
+    if (!p.sexe) stats.sansSexe++;
+    const r = upsertCoureur({ codeMassar: p.codeMassar, nomComplet: p.nomComplet, sexe: p.sexe || '', anneeNaissance: p.anneeNaissance,
+      elite: !!p.elite, etablissement: data.etablissement || '', classe: p.classe || '' });
+    r === 'new' ? stats.n++ : stats.maj++; fn++;
+  });
+  stats.rep.push(`${escapeHtml(data.etablissement || label)} : ${fn} participant(s)`);
+}
+function afficherRapportImport(stats) {
+  document.getElementById('import-report').innerHTML = `<div class="warn-banner" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">
+    ${stats.n} nouveau(x), ${stats.maj} mis à jour${stats.excl ? `, ${stats.excl} exclu(s) (hors âge)` : ''}${stats.sansSexe ? `, ⚠️ ${stats.sansSexe} sans sexe (à corriger)` : ''}<br>${stats.rep.join('<br>')}</div>`;
+}
+document.getElementById('import-equipes').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files); const stats = { n: 0, maj: 0, excl: 0, sansSexe: 0, rep: [] };
+  if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); e.target.value = ''; return; }
+  for (const f of files) {
+    try { traiterEquipe(JSON.parse(await f.text()), f.name, stats); }
+    catch (err) { stats.rep.push(`${escapeHtml(f.name)} : erreur (${escapeHtml(err.message)})`); }
+  }
+  saveDB(); e.target.value = ''; renderAll();
+  afficherRapportImport(stats);
+});
+
+function attribuerDossards(tout) {
+  if (tout && !confirm('Renuméroter TOUS les coureurs ? Les dossards déjà imprimés seront invalidés.')) return;
+
+  // --- Helpers internes ---
+  const catIdxOf = cat => { if (!cat) return null; const m = cat.id.match(/categ(\d+)/); return m ? parseInt(m[1], 10) : null; };
+
+  const counters = {};                  // clé "ci_sx_E|S" → prochain numéro séquentiel
+  const startSeq = isElite => isElite ? 901 : 1;
+
+  if (tout) {
+    DB.coureurs.forEach(c => c.dossard = null);
+  } else {
+    // Scanner les dossards existants au format XXXXX pour connaître la prochaine place libre
+    DB.coureurs.forEach(c => {
+      const d = c.dossard;
+      if (!d || d < 10000) return;                    // ignore ancien format et vides
+      const ci  = Math.floor(d / 10000);
+      const sd  = Math.floor((d % 10000) / 1000);
+      const seq = d % 1000;
+      if (ci < 1 || ci > 4 || (sd !== 1 && sd !== 2)) return;
+      const sx  = sd === 1 ? 'G' : 'F';
+      const grp = seq >= 900 ? 'E' : 'S';
+      const k   = `${ci}_${sx}_${grp}`;
+      counters[k] = Math.max(counters[k] || 0, seq);
+    });
+    for (const k in counters) counters[k] += 1;
+  }
+
+  // --- Sélection des coureurs à numéroter ---
+  const cible = DB.coureurs.filter(c => tout || !c.dossard);
+
+  // Tri : par (course/vague) → établissement → code Massar
+  const ordreV = {}; DB.vagues.forEach((v, i) => ordreV[v.id] = i);
+  cible.sort((a, b) =>
+    (ordreV[vagueIdOf(a)] ?? 99) - (ordreV[vagueIdOf(b)] ?? 99)
+    || (a.etablissement || '').localeCompare(b.etablissement || '', 'fr', { sensitivity: 'base' })
+    || (a.codeMassar || '').localeCompare(b.codeMassar || '', 'fr', { numeric: true, sensitivity: 'base' })
+  );
+
+  // --- Attribution ---
+  let attribues = 0, ignores = 0, overflow = false;
+  cible.forEach(c => {
+    const ci = catIdxOf(catOf(c));
+    if (!ci || !c.sexe) { ignores++; return; }        // exclu ou sexe manquant
+    const k = `${ci}_${c.sexe}_${c.elite ? 'E' : 'S'}`;
+    if (counters[k] === undefined) counters[k] = startSeq(c.elite);
+
+    const seq = counters[k]++;
+    if (!c.elite && seq >= 900) overflow = true;      // dépasse la zone SPT (<900)
+    if (c.elite && seq > 999)   overflow = true;      // dépasse la zone Élite
+
+    const sexDigit = c.sexe === 'G' ? 1 : 2;
+    c.dossard = ci * 10000 + sexDigit * 1000 + seq;
+    attribues++;
+  });
+
+  saveDB(); renderAll();
+  let msg = `${attribues} dossard(s) attribué(s)`;
+  if (ignores)  msg += ` — ${ignores} ignoré(s) (exclu / sexe manquant)`;
+  if (overflow) msg += ` — ⚠️ dépassement de capacité (max 899 SPT / 99 Élite par groupe)`;
+  showToast(msg);
+}
+
+/* ---------- Tri de la grille Inscriptions ---------- */
+let coureursSort = { col: null, dir: 'asc' }; // col = null → tri par défaut : établissement → code Massar
+
+const COUREURS_SORT_GETTERS = {
+  dossard:       c => c.dossard || 1e9,                       // sans dossard → en fin
+  codeMassar:    c => c.codeMassar || '',
+  nomComplet:    c => c.nomComplet || '',
+  sexe:          c => c.sexe || '',
+  annee:         c => c.anneeNaissance || 0,
+  etablissement: c => c.etablissement || '',
+  course:        c => { const v = vagueOf(c); return v ? v.nom : ''; },
+  elite:         c => c.elite ? 1 : 0
+};
+
+function sortCoureurs(list) {
+  const { col, dir } = coureursSort;
+  const mul = dir === 'desc' ? -1 : 1;
+
+  // Tri par défaut : établissement (alphabétique) puis code Massar
+  if (!col) {
+    return list.sort((a, b) =>
+      (a.etablissement || '').localeCompare(b.etablissement || '', 'fr', { sensitivity: 'base' })
+      || (a.codeMassar || '').localeCompare(b.codeMassar || '', 'fr', { numeric: true, sensitivity: 'base' })
+    );
+  }
+
+  const get = COUREURS_SORT_GETTERS[col];
+  return list.sort((a, b) => {
+    const va = get(a), vb = get(b);
+    let cmp;
+    if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+    else cmp = String(va).localeCompare(String(vb), 'fr', { sensitivity: 'base', numeric: true });
+    // Second critère stable : code Massar
+    if (cmp === 0 && col !== 'codeMassar')
+      cmp = (a.codeMassar || '').localeCompare(b.codeMassar || '', 'fr', { numeric: true, sensitivity: 'base' });
+    return cmp * mul;
+  });
+}
+
+function sortCoureursBy(col) {
+  if (coureursSort.col === col) {
+    coureursSort.dir = coureursSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    coureursSort.col = col;
+    coureursSort.dir = 'asc';
+  }
+  renderCoureurs();
+}
+
+function updateCoureursSortIndicators() {
+  document.querySelectorAll('#sec-inscriptions th.sortable').forEach(th => {
+    th.classList.remove('asc', 'desc');
+    if (th.dataset.sort === coureursSort.col) th.classList.add(coureursSort.dir);
+  });
+}
+
+function renderCoureurs() {
+  const q = (document.getElementById('search-coureur').value || '').toLowerCase();
+  const list = DB.coureurs
+    .filter(c => !q || `${c.nomComplet} ${c.codeMassar} ${c.dossard || ''} ${c.etablissement}`.toLowerCase().includes(q));
+
+  sortCoureurs(list);
+
+  document.getElementById('coureurs-count').textContent = DB.coureurs.length;
+  document.getElementById('coureurs-tbody').innerHTML = list.map(c => {
+    const cat = catOf(c), v = vagueOf(c);
+    return `<tr class="${c.sexe === 'G' ? 'row-g' : c.sexe === 'F' ? 'row-f' : ''}">
+      <td>${c.dossard ? `<span class="badge">#${c.dossard}</span>` : '—'}</td><td>${escapeHtml(c.codeMassar)}</td>
+      <td dir="auto">${escapeHtml(c.nomComplet)}</td><td>${c.sexe || '<span class="badge warn">?</span>'}</td>
+      <td>${c.anneeNaissance} — ${cat ? escapeHtml(cat.nom) : '<span class="badge warn">exclu</span>'}</td>
+      <td dir="auto">${escapeHtml(c.etablissement || '—')}</td><td>${v ? escapeHtml(v.nom) : '—'}</td>
+      <td><input type="checkbox" ${c.elite ? 'checked' : ''} onchange="toggleEliteCoureur('${c.codeMassar}', this.checked)"></td>
+      <td><button class="danger small" onclick="deleteCoureur('${c.codeMassar}')">✕</button></td></tr>`;
+  }).join('');
+
+  updateCoureursSortIndicators();
+}
+
+function exportCoureursCSV() {
+  if (!DB.coureurs.length) { showToast('Aucun coureur'); return; }
+  const rows = [['Dossard','Code Massar','Nom complet','Sexe','Année naissance','Catégorie','Sous-catégorie','Établissement','Classe','Course']];
+  DB.coureurs.slice().sort((a, b) => (a.dossard || 1e9) - (b.dossard || 1e9)).forEach(c => {
+    const cat = catOf(c), v = vagueOf(c);
+    rows.push([c.dossard || '', c.codeMassar, c.nomComplet, c.sexe, c.anneeNaissance, cat ? cat.nom : 'Exclu', c.elite ? 'Elite' : 'Sport pour tous', c.etablissement, c.classe, v ? v.nom : '']);
+  });
+  dl('\uFEFF' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\n'), (DB.course.nom || 'SmartCross') + '_Inscrits.csv', 'text/csv');
+}
+
+/* ===================== 9. DOSSARDS ===================== */
+function renderDossardPreview() {
+  const grid = document.getElementById('dossard-preview-grid'); grid.innerHTML = '';
+  const manquants = DB.coureurs.filter(c => !c.dossard).length;
+  document.getElementById('dossard-warning').innerHTML = manquants ? `<div class="warn-banner">⚠️ ${manquants} coureur(s) sans dossard : attribuez-les dans l'onglet Inscriptions.</div>` : '';
+  const list = DB.coureurs.filter(c => c.dossard).sort((a, b) => a.dossard - b.dossard);
+  if (!list.length) { grid.innerHTML = '<p class="hint">Aucun coureur numéroté.</p>'; return; }
+  list.forEach((c, i) => {
+    const v = vagueOf(c), card = document.createElement('div'); card.className = 'dossard-card';
+    card.innerHTML = `<div class="num">#${c.dossard}</div><div class="nom" dir="auto">${escapeHtml(c.nomComplet)}</div>
+      <div class="cat">${v ? escapeHtml(v.nom) : ''}${c.elite ? ' — ⭐ Élite' : ''}</div><div class="qr-box" id="qr-${i}"></div>`;
+    grid.appendChild(card);
+        new QRCode(document.getElementById('qr-' + i), { text: String(c.dossard), width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M });
+  });
+}
+async function generateDossardsPDF() {
+  const list = DB.coureurs.filter(c => c.dossard).sort((a, b) => a.dossard - b.dossard);
+  if (!list.length) { showToast('Aucun coureur numéroté'); return; }
+  const h2c = window.html2canvas; if (!h2c) { showToast('Librairie html2canvas non chargée (connexion internet ?)'); return; }
+  showToast('Génération du PDF… patientez');
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' }), stage = document.getElementById('pdf-stage');
+  for (let p = 0; p * 8 < list.length; p++) {
+    stage.innerHTML = ''; const page = document.createElement('div'); page.className = 'pdf-page'; stage.appendChild(page);
+    list.slice(p * 8, p * 8 + 8).forEach((c, k) => {
+      const v = vagueOf(c), card = document.createElement('div'); card.className = 'pdf-card';
+      card.innerHTML = `<div class="course">${v ? escapeHtml(v.nom) : ''}</div><div class="num">${c.dossard}</div>
+        <div class="nom" dir="auto">${escapeHtml(c.nomComplet)}</div><div class="etab" dir="auto">${escapeHtml(c.etablissement || '')}</div>
+        <div class="tag">${c.elite ? '⭐ ÉLITE' : '&nbsp;'}</div><div id="pq-${k}"></div>`;
+      page.appendChild(card);
+      new QRCode(card.querySelector('#pq-' + k), { text: c.codeMassar, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
+    });
+    await new Promise(r => setTimeout(r, 120));
+    const canvas = await h2c(page, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    if (p > 0) doc.addPage();
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+  }
+  stage.innerHTML = '';
+  doc.save((DB.course.nom || 'SmartCross') + '_Dossards.pdf'); showToast('PDF généré');
+}
+
+/* ===================== 10. COURSE : DEPARTS ===================== */
+function topDepart(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v) return;
+  if (v.depart && !confirm('Cette course a déjà un top départ. Le remplacer ?')) return;
+  v.depart = Date.now(); saveDB(); renderCourse(); showToast(`Top départ : ${v.nom}`);
+}
+function annulerDepart(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v || !confirm('Annuler le départ de cette course ?')) return;
+  v.depart = null; saveDB(); renderCourse();
+}
+function renderCourse() {
+  document.getElementById('departs-list').innerHTML = DB.vagues.length
+    ? '<table><thead><tr><th>Course</th><th>Prévu</th><th>Inscrits</th><th>Arrivés</th><th>Départ réel</th><th></th></tr></thead><tbody>' +
+      DB.vagues.map(v => {
+        const ins = coureursDeVague(v.id), arr = ins.filter(c => DB.arrivees.some(a => a.codeMassar === c.codeMassar)).length;
+        return `<tr><td>${escapeHtml(v.nom)}</td><td>${v.heure || '—'}</td><td>${ins.length}</td><td>${arr}</td>
+          <td>${v.depart ? `<span class="badge ok">${fmtClock(v.depart)}</span>` : '<span class="badge">Non parti</span>'}</td>
+          <td>${v.depart ? `<button class="secondary small" onclick="annulerDepart('${v.id}')">Annuler</button>` : `<button class="go" onclick="topDepart('${v.id}')">🚦 Top départ</button>`}</td></tr>`;
+      }).join('') + '</tbody></table>'
+    : '<p class="hint">Définissez l\'année limite (Paramètres) pour générer les 8 courses.</p>';
+  renderArrivees();
+}
+
+/* ===================== 11. COURSE : ARRIVEE (scan QR / manuel) ===================== */
+let stream = null, scanning = false, lastScan = { code: '', t: 0 };
+async function toggleScan() { scanning ? stopScan() : startScan(); }
+async function startScan() {
+  if (!window.jsQR) { showToast('Librairie jsQR non chargée (connexion internet ?)'); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    const video = document.getElementById('video'); video.srcObject = stream; await video.play();
+    document.getElementById('video-wrap').style.display = 'block';
+    document.getElementById('btn-scan').textContent = '⏹ Arrêter le scan'; scanning = true; scanLoop();
+  } catch (err) { showToast('Caméra inaccessible (HTTPS requis + autorisation) : ' + err.message); }
+}
+function stopScan() {
+  scanning = false; if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  document.getElementById('video-wrap').style.display = 'none';
+  const b = document.getElementById('btn-scan'); if (b) b.textContent = '📷 Démarrer le scan QR';
+}
+function scanLoop() {
+  if (!scanning) return;
+  const video = document.getElementById('video'), canvas = document.getElementById('scan-canvas');
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    const w = Math.min(640, video.videoWidth), h = Math.round(video.videoHeight * w / video.videoWidth);
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(video, 0, 0, w, h);
+    const code = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+    if (code && code.data) {
+      const now = Date.now();
+      if (!(code.data === lastScan.code && now - lastScan.t < 3000)) { lastScan = { code: code.data, t: now }; enregistrerArrivee(code.data.trim(), 'scan', now); }
+    }
+  }
+  requestAnimationFrame(scanLoop);
+}
+function arriveeManuelle() {
+  const inp = document.getElementById('manual-dossard'), n = parseInt(inp.value, 10), now = Date.now();
+  if (!n) return; const c = findByDossard(n);
+  if (!c) { showFeedback(`❌ Dossard ${n} inconnu`, false); beep(false); }
+  else enregistrerArrivee(c.codeMassar, 'manuel', now);
+  inp.value = ''; inp.focus();
+}
+function showFeedback(html, ok) {
+  const el = document.getElementById('last-arrival'); el.innerHTML = html;
+  el.style.background = ok ? '#ecfdf5' : '#fef2f2'; el.style.borderColor = ok ? '#a7f3d0' : '#fecaca';
+}
+
+function enregistrerArrivee(code, source, ts) {
+  code = String(code).trim();
+  let c = null;
+  // 1) Si c'est un nombre → chercher par dossard
+  if (/^\d+$/.test(code)) c = findByDossard(parseInt(code, 10));
+  // 2) Sinon (ou si non trouvé) → repli sur code Massar (utile pour anciens QR)
+  if (!c) c = findByCode(code);
+
+  if (!c) { showFeedback(`❌ QR inconnu : ${escapeHtml(code)}`, false); beep(false); return; }
+
+  const v = vagueOf(c);
+  if (!v || !v.depart) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : course non partie`, false); beep(false); return; }
+  if (DB.arrivees.some(a => a.codeMassar === c.codeMassar)) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : déjà enregistré`, false); beep(false); return; }
+
+  DB.arrivees.push({ codeMassar: c.codeMassar, ts, source });
+  saveDB(); beep(true);
+
+  const rang = classementDe(v.id, !!c.elite).findIndex(r => r.c.codeMassar === c.codeMassar) + 1;
+  showFeedback(`✅ <b>#${c.dossard}</b> <span dir="auto">${escapeHtml(c.nomComplet)}</span> — ${fmtTime(ts - v.depart)} — ${rang}ᵉ ${c.elite ? 'Élite' : 'Sport pour tous'} (${escapeHtml(v.nom)})`, true);
+  renderCourse();
+}
+
+function supprimerArrivee(code) {
+  if (!confirm('Supprimer cette arrivée ?')) return;
+  DB.arrivees = DB.arrivees.filter(a => a.codeMassar !== code); saveDB(); renderCourse();
+}
+function renderArrivees() {
+  document.getElementById('arrivees-count').textContent = DB.arrivees.length;
+  document.getElementById('arrivees-tbody').innerHTML = DB.arrivees.slice().sort((a, b) => b.ts - a.ts).map(a => {
+    const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null;
+    return `<tr><td>${fmtClock(a.ts)}</td><td>${c ? '#' + c.dossard : '?'}</td><td dir="auto">${c ? escapeHtml(c.nomComplet) : escapeHtml(a.codeMassar)}</td>
+      <td>${v ? escapeHtml(v.nom) : '—'}</td><td>${v && v.depart ? fmtTime(a.ts - v.depart) : '—'}</td><td>${a.source}</td>
+      <td><button class="danger small" onclick="supprimerArrivee('${a.codeMassar}')">✕</button></td></tr>`;
+  }).join('');
+}
+
+/* ===================== 12. CLASSEMENTS ===================== */
+function classementDe(vagueId, elite) {
+  const v = DB.vagues.find(x => x.id === vagueId); if (!v || !v.depart) return [];
+  return coureursDeVague(vagueId).filter(c => !!c.elite === elite)
+    .map(c => ({ c, a: DB.arrivees.find(x => x.codeMassar === c.codeMassar) })).filter(r => r.a)
+    .sort((x, y) => x.a.ts - y.a.ts).map(r => ({ c: r.c, ts: r.a.ts, temps: r.a.ts - v.depart }));
+}
+function tableClassement(vagueId, elite) {
+  const rows = classementDe(vagueId, elite);
+  const total = coureursDeVague(vagueId).filter(c => !!c.elite === elite).length;
+  const head = `<p class="hint">${rows.length} arrivé(s) sur ${total} inscrit(s)</p>`;
+  if (!rows.length) return head + '<p class="hint">Aucun classement pour l\'instant.</p>';
+  return head + '<table><thead><tr><th>Rang</th><th>Dossard</th><th>Nom complet</th><th>Établissement</th><th>Temps</th></tr></thead><tbody>' +
+    rows.map((r, i) => `<tr><td><b>${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
+}
+function renderClassements() {
+  const sel = document.getElementById('clas-vague'), cur = sel.value;
+  sel.innerHTML = DB.vagues.map(v => `<option value="${v.id}">${escapeHtml(v.nom)}</option>`).join('');
+  if (cur && DB.vagues.some(v => v.id === cur)) sel.value = cur;
+  if (!DB.vagues.length) { document.getElementById('clas-elite').innerHTML = document.getElementById('clas-spt').innerHTML = '<p class="hint">Définissez l\'année limite.</p>'; return; }
+  const v = DB.vagues.find(x => x.id === sel.value) || DB.vagues[0];
+  document.getElementById('clas-summary').textContent = v.depart ? `Départ réel : ${fmtClock(v.depart)}` : 'Course non partie.';
+  document.getElementById('clas-elite').innerHTML = tableClassement(v.id, true);
+  document.getElementById('clas-spt').innerHTML = tableClassement(v.id, false);
+}
+function exportClassementsCSV() {
+  const rows = [['Course','Sous-catégorie','Rang','Dossard','Code Massar','Nom complet','Établissement','Temps']];
+  DB.vagues.forEach(v => [true, false].forEach(el => classementDe(v.id, el).forEach((r, i) =>
+    rows.push([v.nom, el ? 'Elite' : 'Sport pour tous', i + 1, r.c.dossard, r.c.codeMassar, r.c.nomComplet, r.c.etablissement, fmtTime(r.temps)]))));
+  if (rows.length === 1) { showToast('Aucun résultat à exporter'); return; }
+  dl('\uFEFF' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\n'), (DB.course.nom || 'SmartCross') + '_Classements.csv', 'text/csv');
+}
+
+/* ===================== 13. INIT ===================== */
+function renderAll() { renderParametres(); renderCoureurs(); renderCourse(); renderClassements(); }
+renderAll();
+</script>
+</body>
+</html>
