@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.005</title>
+<title>SmartCross - Organisateur v2.006</title>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -72,6 +72,14 @@ main { padding:20px 24px; max-width:1150px; margin:0 auto; }
 #toast.show { opacity:1; }
 @media (max-width:640px) { main { padding:14px; } header { padding:12px 14px; } nav { padding:6px 14px 0; } }
 
+/* ===== SAUVEGARDE ===== */
+#btn-save { background:#059669; }
+#btn-save.dirty { background:#f59e0b; color:#111; animation:pulse-save 1.4s infinite; }
+@keyframes pulse-save { 0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,.7); } 50% { box-shadow:0 0 0 7px rgba(245,158,11,0); } }
+#save-status { font-size:.82em; margin-left:6px; }
+#save-banner { display:none; position:sticky; top:0; z-index:60; background:#fef3c7; border-bottom:2px solid #f59e0b; color:#92400e; padding:9px 24px; font-size:.9em; font-weight:600; }
+#save-banner button { margin-left:10px; background:#d97706; }
+
 /* ===== 5. TRIS ===== */
 th.sortable { cursor:pointer; user-select:none; position:relative; padding-right:22px; }
 th.sortable:hover { background:#e5e7eb; }
@@ -88,6 +96,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   <div style="text-align:right;">
     <div id="course-name-display" style="font-weight:600;"></div>
     <div id="google-user" style="font-size:.85em;margin:4px 0;">🔒 Non connecté au Drive</div>
+    <div style="margin:4px 0;"><button onclick="sauvegarderOrganisateur()" id="btn-save" title="Ctrl+S">💾 Sauvegarder</button><span id="save-status"></span></div>
     <button onclick="connexionGoogle()" id="btn-google">🔐 Se connecter avec Google</button>
     <button onclick="deconnexionGoogle()" id="btn-logout" style="display:none;">🚪 Déconnecter</button>
   </div>
@@ -99,6 +108,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   <button class="tab" data-tab="course">🏁 Course</button>
   <button class="tab" data-tab="classements">🏆 Classements</button>
 </nav>
+<div id="save-banner"></div>
 
 <main>
 
@@ -259,7 +269,90 @@ function loadDB() {
   };
 }
 let DB = loadDB();
-function saveDB() { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }
+// saveDB() = modification faite par l'utilisateur (marque l'état « non sauvegardé sur le Drive »)
+// saveDB(true) = écriture locale silencieuse (synchro venant du Drive), ne marque pas de modification
+function saveDB(silent) {
+  if (!silent) { DB.majLe = Date.now(); if (!dirtySince) dirtySince = DB.majLe; }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+  majIndicateurSauvegarde();
+}
+
+/* ===================== SAUVEGARDE ORGANISATEUR (Drive) + SURVEILLANCE ===================== */
+const SAVE_FILE = 'sauvegardeOrganisateur.json';
+const SYNC_KEY = 'smartCrossOrganisateurSync_v1';
+const RAPPEL_MS = 3 * 60 * 1000; // bandeau de rappel après 3 min de modifications non sauvegardées
+let dirtySince = null;
+function getSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || { local: 0, drive: 0 }; } catch (e) { return { local: 0, drive: 0 }; } }
+function setSync(o) { localStorage.setItem(SYNC_KEY, JSON.stringify(o)); }
+function localHasData() { return DB.coureurs.length || DB.arrivees.length || DB.vagues.some(v => v.depart); }
+function isDirty() { return (DB.majLe || 0) > (getSync().local || 0); }
+// Données déjà présentes sur l'appareil avant cette version : à considérer comme non sauvegardées
+if (!DB.majLe && localHasData()) DB.majLe = Date.now();
+if (isDirty()) dirtySince = DB.majLe;
+function majIndicateurSauvegarde() {
+  const btn = document.getElementById('btn-save'), st = document.getElementById('save-status'), bn = document.getElementById('save-banner');
+  if (!btn) return;
+  const dirty = isDirty();
+  btn.classList.toggle('dirty', dirty);
+  const sy = getSync();
+  if (dirty) { st.textContent = '● Modifications non sauvegardées'; st.style.color = '#b45309'; }
+  else if (sy.drive) { st.textContent = '✅ Sauvegardé à ' + new Date(sy.drive).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); st.style.color = '#1e8449'; }
+  else { st.textContent = ''; }
+  const min = dirty && dirtySince ? Math.floor((Date.now() - dirtySince) / 60000) : 0;
+  if (dirty && dirtySince && Date.now() - dirtySince >= RAPPEL_MS) {
+    bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
+    bn.style.display = 'block';
+  } else bn.style.display = 'none';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.006';
+}
+setInterval(majIndicateurSauvegarde, 30000);
+window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); sauvegarderOrganisateur(); } });
+
+async function trouverSauvegardeDrive() {
+  const q = encodeURIComponent(`name='${SAVE_FILE}' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
+  const f = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&fields=files(id,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  if (!f.files || !f.files.length) return null;
+  const data = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.files[0].id}?alt=media`);
+  return data && data.db && Array.isArray(data.db.coureurs) ? data : null;
+}
+async function sauvegarderOrganisateur() {
+  const btn = document.getElementById('btn-save'), st = document.getElementById('save-status');
+  btn.disabled = true; st.textContent = 'Sauvegarde en cours…'; st.style.color = '#555';
+  try {
+    await driveAuth();
+    // Un autre organisateur a-t-il sauvegardé entre-temps ?
+    const distante = await trouverSauvegardeDrive();
+    if (distante && distante.sauvegardeLe > (getSync().drive || 0)) {
+      const qui = distante.par ? ' par ' + distante.par : '';
+      if (!confirm(`Une sauvegarde plus récente existe sur le Drive (${new Date(distante.sauvegardeLe).toLocaleString('fr-FR')}${qui}).\n\nL'écraser avec les données de cet appareil ?`)) {
+        showToast('Sauvegarde annulée'); majIndicateurSauvegarde(); return;
+      }
+    }
+    const t = Date.now(), majLe = DB.majLe || t;
+    const payload = { version: 1, sauvegardeLe: t, par: userEmail || '', db: DB };
+    await driveUpsert(SAVE_FILE, DRIVE_FOLDER_ID, JSON.stringify(payload));
+    setSync({ local: majLe, drive: t }); dirtySince = null;
+    majIndicateurSauvegarde(); showToast('💾 Sauvegarde envoyée sur le Drive');
+  } catch (e) {
+    st.textContent = '❌ Échec de la sauvegarde'; st.style.color = '#c0392b'; showToast('Échec : ' + e.message);
+  } finally { btn.disabled = false; }
+}
+// Importation automatique à l'ouverture de session (tout compte organisateur)
+async function chargerSauvegardeDrive() {
+  try {
+    const data = await trouverSauvegardeDrive();
+    if (!data) { showToast('Aucune sauvegarde organisateur sur le Drive'); return; }
+    const sy = getSync();
+    if (!(data.sauvegardeLe > (sy.drive || 0))) return; // cet appareil est déjà à jour
+    if (isDirty() && !confirm(`Cet appareil contient des modifications non sauvegardées.\n\nLa sauvegarde du Drive (${new Date(data.sauvegardeLe).toLocaleString('fr-FR')}${data.par ? ' par ' + data.par : ''}) est plus récente.\n\nOK = la charger (les modifications locales seront perdues)\nAnnuler = garder les données de cet appareil`)) return;
+    DB = Object.assign({ course: { nom: '', date: '' }, anneeLimite: null, vagues: [], coureurs: [], arrivees: [] }, data.db);
+    DB.majLe = Date.now(); dirtySince = null;
+    setSync({ local: DB.majLe, drive: data.sauvegardeLe });
+    saveDB(true); renderAll();
+    showToast(`✅ Sauvegarde du ${new Date(data.sauvegardeLe).toLocaleString('fr-FR')} importée`);
+  } catch (e) { showToast('⚠️ Lecture de la sauvegarde impossible : ' + e.message); }
+}
 
 /* ===================== DRIVE (lecture équipes + publication config) ===================== */
 // ID client OAuth du projet Google Cloud dédié à l'organisateur (à créer/renseigner)
@@ -269,6 +362,7 @@ const DRIVE_FOLDER_ID = '1BLphnNEO3SOoYMvtUD__Mrbtv_-NdhkS';
 // Lecture des fichiers déposés par les équipes (comptes différents) + écriture du fichier de config
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
 let driveToken = null;
+let userEmail = '';
 
 function driveStatus(elId, msg, ok) {
   const el = document.getElementById(elId);
@@ -302,11 +396,11 @@ async function afficherUtilisateur() {
   document.getElementById('btn-logout').style.display = '';
   try {
     const u = (await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)')).user;
-    document.getElementById('google-user').textContent = '✅ ' + u.displayName + ' (' + u.emailAddress + ')';
+    userEmail = u.emailAddress; document.getElementById('google-user').textContent = '✅ ' + u.displayName + ' (' + u.emailAddress + ')';
   } catch (e) { document.getElementById('google-user').textContent = '✅ Connecté à Google'; }
 }
 async function connexionGoogle() {
-  try { await driveAuth(); await chargerConfigDrive(); } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
+  try { await driveAuth(); await chargerConfigDrive(); await chargerSauvegardeDrive(); } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
 }
 // Synchronise automatiquement les réglages (année limite, course, horaires) depuis le fichier publié :
 // un seul événement, donc une seule configuration, quel que soit le compte organisateur connecté.
@@ -321,12 +415,12 @@ async function chargerConfigDrive() {
     DB.anneeLimite = cfg.anneeLimite;
     regenerateVagues();
     if (Array.isArray(cfg.courses)) cfg.courses.forEach(c => { const v = DB.vagues.find(x => x.id === c.id); if (v && c.heure) v.heure = c.heure; });
-    saveDB(); renderAll();
+    saveDB(true); renderAll();
     driveStatus('config-drive-status', `✅ Configuration synchronisée depuis le Drive (année limite ${cfg.anneeLimite}).`, true);
   } catch (e) { driveStatus('config-drive-status', '⚠️ Lecture de la configuration impossible : ' + e.message, false); }
 }
 function deconnexionGoogle() {
-  if (!confirm('Se déconnecter ? La page va se recharger.')) return;
+  if (!confirm((isDirty() ? '⚠️ Des modifications ne sont pas sauvegardées sur le Drive !\n\n' : '') + 'Se déconnecter ? La page va se recharger.')) return;
   try { if (driveToken && window.google && google.accounts) google.accounts.oauth2.revoke(driveToken, () => {}); } catch (e) {}
   driveToken = null;
   sessionStorage.removeItem('sc_org_drive_token');
@@ -334,10 +428,15 @@ function deconnexionGoogle() {
 }
 async function driveUpsert(name, parent, content) {
   const q = encodeURIComponent(`name='${name}' and '${parent}' in parents and trashed=false`);
-  const found = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  const found = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
   if (found.files && found.files.length) {
-    return driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${found.files[0].id}?uploadType=media&supportsAllDrives=true`,
-      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content });
+    try {
+      return await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${found.files[0].id}?uploadType=media&supportsAllDrives=true`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content });
+    } catch (e) {
+      // fichier créé par un autre compte organisateur (scope drive.file) : on crée une nouvelle version, la plus récente est toujours lue
+      if (!/Drive (403|404)/.test(e.message)) throw e;
+    }
   }
   const b = 'sc' + Date.now();
   const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parent], mimeType: 'application/json' })}\r\n--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${b}--`;
@@ -379,7 +478,7 @@ async function publierConfigSurDrive() {
 (function reprendreSessionDrive() {
   try {
     const saved = JSON.parse(sessionStorage.getItem('sc_org_drive_token') || 'null');
-    if (saved && saved.exp > Date.now()) { driveToken = saved.t; afficherUtilisateur().then(chargerConfigDrive); }
+    if (saved && saved.exp > Date.now()) { driveToken = saved.t; afficherUtilisateur().then(chargerConfigDrive).then(chargerSauvegardeDrive); }
   } catch (e) {}
 })();
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
@@ -467,7 +566,7 @@ function exportConfig() {
 function resetAll() {
   if (!confirm('Tout effacer (inscrits, départs, arrivées) ?')) return;
   if (!confirm('Vraiment ? Cette action est définitive.')) return;
-  localStorage.removeItem(STORAGE_KEY); DB = loadDB(); renderAll(); showToast('Données effacées');
+  localStorage.removeItem(STORAGE_KEY); DB = loadDB(); saveDB(); renderAll(); showToast('Données effacées (pensez à sauvegarder)');
 }
 function dl(content, filename, type) {
   const a = document.createElement('a');
@@ -865,7 +964,7 @@ function exportClassementsCSV() {
 }
 
 /* ===================== 13. INIT ===================== */
-function renderAll() { renderParametres(); renderCoureurs(); renderCourse(); renderClassements(); }
+function renderAll() { renderParametres(); renderCoureurs(); renderCourse(); renderClassements(); majIndicateurSauvegarde(); }
 renderAll();
 </script>
 </body>
