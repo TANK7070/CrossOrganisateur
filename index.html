@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.006</title>
+<title>SmartCross - Organisateur v2.007</title>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -96,7 +96,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   <div style="text-align:right;">
     <div id="course-name-display" style="font-weight:600;"></div>
     <div id="google-user" style="font-size:.85em;margin:4px 0;">🔒 Non connecté au Drive</div>
-    <div style="margin:4px 0;"><button onclick="sauvegarderOrganisateur()" id="btn-save" title="Ctrl+S">💾 Sauvegarder</button><span id="save-status"></span></div>
+    <div style="margin:4px 0;"><button onclick="sauvegarderOrganisateur()" id="btn-save" title="Ctrl+S">💾 Sauvegarder</button><span id="save-status"></span><div id="last-save-info" style="font-size:.78em;color:#9ca3af;margin-top:2px;"></div></div>
     <button onclick="connexionGoogle()" id="btn-google">🔐 Se connecter avec Google</button>
     <button onclick="deconnexionGoogle()" id="btn-logout" style="display:none;">🚪 Déconnecter</button>
   </div>
@@ -298,17 +298,21 @@ function majIndicateurSauvegarde() {
   if (dirty) { st.textContent = '● Modifications non sauvegardées'; st.style.color = '#b45309'; }
   else if (sy.drive) { st.textContent = '✅ Sauvegardé à ' + new Date(sy.drive).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); st.style.color = '#1e8449'; }
   else { st.textContent = ''; }
+  const info = document.getElementById('last-save-info');
+  if (info) info.textContent = sy.drive ? `Dernière sauvegarde : ${sy.parNom || sy.par || 'organisateur inconnu'} · ${quandTxt(sy.drive)}` : '';
   const min = dirty && dirtySince ? Math.floor((Date.now() - dirtySince) / 60000) : 0;
   if (dirty && dirtySince && Date.now() - dirtySince >= RAPPEL_MS) {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.006';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.007';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); sauvegarderOrganisateur(); } });
 
+function qui(d) { return d && (d.parNom || d.par) || ''; }
+function quandTxt(ms) { const d = new Date(ms); return d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
 async function trouverSauvegardeDrive() {
   const q = encodeURIComponent(`name='${SAVE_FILE}' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
   const f = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&fields=files(id,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
@@ -324,15 +328,15 @@ async function sauvegarderOrganisateur() {
     // Un autre organisateur a-t-il sauvegardé entre-temps ?
     const distante = await trouverSauvegardeDrive();
     if (distante && distante.sauvegardeLe > (getSync().drive || 0)) {
-      const qui = distante.par ? ' par ' + distante.par : '';
-      if (!confirm(`Une sauvegarde plus récente existe sur le Drive (${new Date(distante.sauvegardeLe).toLocaleString('fr-FR')}${qui}).\n\nL'écraser avec les données de cet appareil ?`)) {
+      const qui_ = qui(distante) ? ' par ' + qui(distante) : '';
+      if (!confirm(`Une sauvegarde plus récente existe sur le Drive (${new Date(distante.sauvegardeLe).toLocaleString('fr-FR')}${qui_}).\n\nL'écraser avec les données de cet appareil ?`)) {
         showToast('Sauvegarde annulée'); majIndicateurSauvegarde(); return;
       }
     }
     const t = Date.now(), majLe = DB.majLe || t;
-    const payload = { version: 1, sauvegardeLe: t, par: userEmail || '', db: DB };
+    const payload = { version: 1, sauvegardeLe: t, par: userEmail || '', parNom: userName || userEmail || '', db: DB };
     await driveUpsert(SAVE_FILE, DRIVE_FOLDER_ID, JSON.stringify(payload));
-    setSync({ local: majLe, drive: t }); dirtySince = null;
+    setSync({ local: majLe, drive: t, par: userEmail, parNom: userName || userEmail }); dirtySince = null;
     majIndicateurSauvegarde(); showToast('💾 Sauvegarde envoyée sur le Drive');
   } catch (e) {
     st.textContent = '❌ Échec de la sauvegarde'; st.style.color = '#c0392b'; showToast('Échec : ' + e.message);
@@ -344,11 +348,11 @@ async function chargerSauvegardeDrive() {
     const data = await trouverSauvegardeDrive();
     if (!data) { showToast('Aucune sauvegarde organisateur sur le Drive'); return; }
     const sy = getSync();
-    if (!(data.sauvegardeLe > (sy.drive || 0))) return; // cet appareil est déjà à jour
-    if (isDirty() && !confirm(`Cet appareil contient des modifications non sauvegardées.\n\nLa sauvegarde du Drive (${new Date(data.sauvegardeLe).toLocaleString('fr-FR')}${data.par ? ' par ' + data.par : ''}) est plus récente.\n\nOK = la charger (les modifications locales seront perdues)\nAnnuler = garder les données de cet appareil`)) return;
+    if (!(data.sauvegardeLe > (sy.drive || 0))) { if (data.sauvegardeLe === sy.drive) { setSync({ ...sy, par: data.par, parNom: data.parNom }); majIndicateurSauvegarde(); } return; } // cet appareil est déjà à jour
+    if (isDirty() && !confirm(`Cet appareil contient des modifications non sauvegardées.\n\nLa sauvegarde du Drive (${new Date(data.sauvegardeLe).toLocaleString('fr-FR')}${qui(data) ? ' par ' + qui(data) : ''}) est plus récente.\n\nOK = la charger (les modifications locales seront perdues)\nAnnuler = garder les données de cet appareil`)) return;
     DB = Object.assign({ course: { nom: '', date: '' }, anneeLimite: null, vagues: [], coureurs: [], arrivees: [] }, data.db);
     DB.majLe = Date.now(); dirtySince = null;
-    setSync({ local: DB.majLe, drive: data.sauvegardeLe });
+    setSync({ local: DB.majLe, drive: data.sauvegardeLe, par: data.par, parNom: data.parNom });
     saveDB(true); renderAll();
     showToast(`✅ Sauvegarde du ${new Date(data.sauvegardeLe).toLocaleString('fr-FR')} importée`);
   } catch (e) { showToast('⚠️ Lecture de la sauvegarde impossible : ' + e.message); }
@@ -359,10 +363,11 @@ async function chargerSauvegardeDrive() {
 const GOOGLE_CLIENT_ID = '1067089369377-brtp5i75lt79lju0n90pf1ie9eus5omj.apps.googleusercontent.com';
 // Dossier Drive partagé "DriveCross"
 const DRIVE_FOLDER_ID = '1BLphnNEO3SOoYMvtUD__Mrbtv_-NdhkS';
-// Lecture des fichiers déposés par les équipes (comptes différents) + écriture du fichier de config
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
+// Accès complet au Drive : lecture des fichiers des équipes (comptes différents) + écriture de config.json et de sauvegardeOrganisateur.json
+// (un seul fichier modifiable par tous les organisateurs, même créé par un autre compte)
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 let driveToken = null;
-let userEmail = '';
+let userEmail = '', userName = '';
 
 function driveStatus(elId, msg, ok) {
   const el = document.getElementById(elId);
@@ -377,7 +382,7 @@ function driveAuth() {
       callback: r => {
         if (r.error) return reject(new Error(r.error));
         driveToken = r.access_token;
-        sessionStorage.setItem('sc_org_drive_token', JSON.stringify({ t: driveToken, exp: Date.now() + 3300 * 1000 }));
+        sessionStorage.setItem('sc_org_drive_token_v2', JSON.stringify({ t: driveToken, exp: Date.now() + 3300 * 1000 }));
         afficherUtilisateur();
         setTimeout(() => driveToken = null, 3300 * 1000);
         resolve(driveToken);
@@ -387,7 +392,7 @@ function driveAuth() {
 }
 async function driveFetch(url, opts) {
   const r = await fetch(url, { ...opts, headers: { ...(opts && opts.headers), Authorization: 'Bearer ' + driveToken } });
-  if (r.status === 401) { driveToken = null; sessionStorage.removeItem('sc_org_drive_token'); }
+  if (r.status === 401) { driveToken = null; sessionStorage.removeItem('sc_org_drive_token_v2'); }
   if (!r.ok) throw new Error('Drive ' + r.status + ' : ' + (await r.text()).slice(0, 150));
   return r.json();
 }
@@ -396,7 +401,7 @@ async function afficherUtilisateur() {
   document.getElementById('btn-logout').style.display = '';
   try {
     const u = (await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)')).user;
-    userEmail = u.emailAddress; document.getElementById('google-user').textContent = '✅ ' + u.displayName + ' (' + u.emailAddress + ')';
+    userEmail = u.emailAddress; userName = u.displayName || u.emailAddress; document.getElementById('google-user').textContent = '✅ ' + u.displayName + ' (' + u.emailAddress + ')';
   } catch (e) { document.getElementById('google-user').textContent = '✅ Connecté à Google'; }
 }
 async function connexionGoogle() {
@@ -423,7 +428,7 @@ function deconnexionGoogle() {
   if (!confirm((isDirty() ? '⚠️ Des modifications ne sont pas sauvegardées sur le Drive !\n\n' : '') + 'Se déconnecter ? La page va se recharger.')) return;
   try { if (driveToken && window.google && google.accounts) google.accounts.oauth2.revoke(driveToken, () => {}); } catch (e) {}
   driveToken = null;
-  sessionStorage.removeItem('sc_org_drive_token');
+  sessionStorage.removeItem('sc_org_drive_token_v2');
   location.reload();
 }
 async function driveUpsert(name, parent, content) {
@@ -434,7 +439,7 @@ async function driveUpsert(name, parent, content) {
       return await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${found.files[0].id}?uploadType=media&supportsAllDrives=true`,
         { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content });
     } catch (e) {
-      // fichier créé par un autre compte organisateur (scope drive.file) : on crée une nouvelle version, la plus récente est toujours lue
+      // repli de sécurité (droit refusé ou fichier introuvable) : on crée un nouveau fichier, le plus récent est toujours lu
       if (!/Drive (403|404)/.test(e.message)) throw e;
     }
   }
@@ -477,7 +482,7 @@ async function publierConfigSurDrive() {
 }
 (function reprendreSessionDrive() {
   try {
-    const saved = JSON.parse(sessionStorage.getItem('sc_org_drive_token') || 'null');
+    const saved = JSON.parse(sessionStorage.getItem('sc_org_drive_token_v2') || 'null');
     if (saved && saved.exp > Date.now()) { driveToken = saved.t; afficherUtilisateur().then(chargerConfigDrive).then(chargerSauvegardeDrive); }
   } catch (e) {}
 })();
