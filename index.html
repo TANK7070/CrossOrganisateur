@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.010</title>
+<title>SmartCross - Organisateur v2.011</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -466,6 +466,15 @@ const Progress = (() => {
 
 /* ===================== 5. DONNEES ===================== */
 const STORAGE_KEY = 'smartCrossOrganisateurDB_v2';
+const SYNC_KEY = 'smartCrossOrganisateurSync_v1';
+// App « vierge » : aucune donnée de la session précédente ne reste sur l'appareil.
+// Appelée à chaque ouverture de page (avant le chargement de DB) et à la déconnexion.
+// Les données réelles vivent sur le Drive (sauvegardeOrganisateur.json) et sont restaurées à la connexion.
+function viderDonneesLocales() {
+  try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(SYNC_KEY); } catch (e) {}
+}
+viderDonneesLocales();
+let quitterSansAlerte = false; // vrai pendant une déconnexion volontaire (pas de double alerte)
 function loadDB() {
   try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) { console.error(e); }
     return {
@@ -487,7 +496,6 @@ function saveDB(silent) {
 
 /* ===================== SAUVEGARDE ORGANISATEUR (Drive) + SURVEILLANCE ===================== */
 const SAVE_FILE = 'sauvegardeOrganisateur.json';
-const SYNC_KEY = 'smartCrossOrganisateurSync_v1';
 const RAPPEL_MS = 3 * 60 * 1000; // bandeau de rappel après 3 min de modifications non sauvegardées
 let dirtySince = null;
 function getSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || { local: 0, drive: 0 }; } catch (e) { return { local: 0, drive: 0 }; } }
@@ -513,10 +521,10 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.010';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.011';
 }
 setInterval(majIndicateurSauvegarde, 30000);
-window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); sauvegarderOrganisateur(); } });
 
 function qui(d) { return d && (d.parNom || d.par) || ''; }
@@ -668,10 +676,12 @@ async function chargerConfigDrive() {
   } catch (e) { driveStatus('config-drive-status', '⚠️ Lecture de la configuration impossible : ' + e.message, false); }
 }
 function deconnexionGoogle() {
-  if (!confirm((isDirty() ? '⚠️ Des modifications ne sont pas sauvegardées sur le Drive !\n\n' : '') + 'Se déconnecter ? La page va se recharger.')) return;
+  if (!confirm((isDirty() ? '⚠️ Des modifications ne sont pas sauvegardées sur le Drive : elles seront PERDUES !\n\n' : '') + 'Se déconnecter ? Les données seront effacées de cet appareil et la page va se recharger.')) return;
+  quitterSansAlerte = true;
   try { if (driveToken && window.google && google.accounts) google.accounts.oauth2.revoke(driveToken, () => {}); } catch (e) {}
   driveToken = null;
-  sessionStorage.removeItem('sc_org_drive_token_v2');
+  viderDonneesLocales();
+  try { sessionStorage.clear(); } catch (e) {}
   location.reload();
 }
 async function driveUpsert(name, parent, content) {
@@ -1320,6 +1330,12 @@ function exportClassementsCSV() {
 
 /* ===================== 13. INIT ===================== */
 function renderAll() { renderParametres(); renderCoureurs(); renderCourse(); renderClassements(); majIndicateurSauvegarde(); }
+// Certains navigateurs (Firefox) réinjectent les valeurs des champs après un rechargement : on les remet à zéro
+document.querySelectorAll('input, textarea').forEach(e => {
+  if (e.type === 'file' || e.type === 'button') return;
+  if (e.type === 'checkbox' || e.type === 'radio') e.checked = false; else e.value = '';
+});
+document.querySelectorAll('select').forEach(e => { e.selectedIndex = 0; });
 renderAll();
 </script>
 </body>
