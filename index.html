@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.007</title>
+<title>SmartCross - Organisateur v2.010</title>
+<link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -60,12 +61,117 @@ main { padding:20px 24px; max-width:1150px; margin:0 auto; }
 .dossard-card .nom { font-weight:600; margin:4px 0; }
 .dossard-card .cat { font-size:.8em; color:#555; }
 .dossard-card .qr-box { margin:6px auto; width:90px; height:90px; }
+
+/* ===== PDF dossards : 2 par page A4, format officiel =====
+   Grille 3 colonnes : [gauche large] [sexe étroit] [droite 230px]
+   L1  titre (1-2)            | ville
+   L2  établissement (1-2)    | année scolaire
+   L3  nom | sexe             | sous-catégorie
+   L4  catégorie (1-2)        | (vide)
+   L5  n° dossard (1-2)       | QR code                         */
 #pdf-stage { position:absolute; left:-12000px; top:0; }
-.pdf-page { width:794px; height:1123px; background:#fff; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(4,1fr); padding:30px; gap:0; }
-.pdf-card { border:1.5px dashed #888; margin:4px; padding:12px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:space-between; font-family:'Segoe UI', Tahoma, Arial, sans-serif; }
-.pdf-card .course { font-size:13px; color:#444; }
-.pdf-card .num { font-size:64px; font-weight:800; line-height:1; }
-.pdf-card .nom { font-size:20px; font-weight:600; }
+
+.pdf-page {
+  width: 794px; height: 1123px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 1fr;
+  padding: 0; gap: 0;
+}
+
+.pdf-card {
+  margin: 6px;
+  border: 2px solid #374151;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 1fr 140px 230px;
+  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-areas:
+    "titre titre ville"
+    "etab  etab  annee"
+    "nom   sexe  souscat"
+    "categ categ vide"
+    "num   num   qr";
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* Cellules : filets droit + bas (retirés explicitement ci-dessous) */
+.pdf-card > div {
+  padding: 7px 14px;
+  border-right: 1px solid #9ca3af;
+  border-bottom: 1px solid #9ca3af;
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* Colonne de droite : pas de filet droit ; dernière ligne : pas de filet bas */
+.pdf-card .ville, .pdf-card .annee-scolaire, .pdf-card .sous-cat,
+.pdf-card .vide, .pdf-card .qr-col { border-right: none; }
+.pdf-card .num, .pdf-card .qr-col { border-bottom: none; }
+
+/* --- L1 : titre arabe / ville --- */
+.pdf-card .titre-ar {
+  grid-area: titre; background: #f3f4f6;
+  font-size: 20px; font-weight: 800; color: #111827; line-height: 1.2;
+  display: flex; align-items: center;
+}
+.pdf-card .ville {
+  grid-area: ville; background: #f3f4f6;
+  font-size: 18px; font-weight: 700; color: #111827;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+
+/* --- L2 : établissement / année scolaire --- */
+.pdf-card .etab {
+  grid-area: etab;
+  font-size: 18px; font-weight: 600; color: #111827;
+  display: flex; align-items: center; word-wrap: break-word;
+}
+.pdf-card .annee-scolaire {
+  grid-area: annee;
+  font-size: 15px; color: #6b7280;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* --- L3 : nom | sexe | sous-catégorie --- */
+.pdf-card .nom {
+  grid-area: nom;
+  font-size: 26px; font-weight: 800; color: #111827; line-height: 1.15;
+  display: flex; align-items: center; padding: 10px 14px;
+  word-wrap: break-word; overflow-wrap: anywhere;
+}
+.pdf-card .sexe {
+  grid-area: sexe;
+  font-size: 16px; font-weight: 600; color: #374151;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+.pdf-card .sous-cat {
+  grid-area: souscat;
+  font-size: 16px; font-weight: 700; color: #92400e;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+
+/* --- L4 : catégorie / (vide) --- */
+.pdf-card .categorie {
+  grid-area: categ;
+  font-size: 16px; font-weight: 600; color: #374151;
+  display: flex; align-items: center;
+}
+.pdf-card .vide { grid-area: vide; }
+
+/* --- L5 : n° dossard / QR code --- */
+.pdf-card .num {
+  grid-area: num;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 150px; font-weight: 900; letter-spacing: -6px; line-height: 1;
+  color: #111827;
+}
+.pdf-card .qr-col {
+  grid-area: qr;
+  display: flex; align-items: center; justify-content: center;
+  padding: 10px;
+}
 .pdf-card .etab { font-size:13px; color:#555; }
 .pdf-card .tag { font-size:13px; font-weight:700; color:#92400e; }
 #toast { position:fixed; bottom:20px; right:20px; background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:.9em; opacity:0; pointer-events:none; transition:opacity .25s; z-index:999; }
@@ -87,6 +193,48 @@ th.sortable::after { content:'⇅'; position:absolute; right:6px; opacity:.35; f
 th.sortable.asc::after  { content:'▲'; opacity:1; color:#2563eb; }
 th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 
+/* ===== Barre de progression (entre header et onglets) ===== */
+#progress-bar {
+  position: relative;
+  height: 0;
+  overflow: hidden;
+  background: #1f2937;              /* même fond que la nav */
+  display: flex; align-items: center; justify-content: center;
+  transition: height .3s ease;
+  z-index: 5;
+}
+#progress-bar.visible { height: 36px; }
+
+#progress-fill {
+  position: absolute; top: 0; left: 0;
+  height: 3px; width: 0%;
+  background: linear-gradient(90deg, #2563eb, #3b82f6);
+  box-shadow: 0 0 6px rgba(37,99,235,.7);
+  transition: width .35s ease;
+}
+#progress-bar.indeterminate #progress-fill {
+  width: 30% !important;
+  transition: none;
+  animation: progress-slide 1.2s infinite ease-in-out;
+}
+@keyframes progress-slide {
+  0%   { margin-left: -30%; }
+  100% { margin-left: 100%; }
+}
+#progress-bar.error #progress-fill { background:#dc2626; box-shadow:0 0 6px rgba(220,38,38,.7); }
+#progress-bar.done  #progress-fill { background:#059669; box-shadow:0 0 6px rgba(5,150,105,.7); }
+
+#progress-label {
+  position: relative; z-index: 1;
+  color: #d1d5db;
+  font-size: .82em;
+  font-weight: 600;
+  letter-spacing: .2px;
+  padding: 0 12px;
+  white-space: nowrap;
+  text-align: center;
+}
+
 </style>
 </head>
 <body>
@@ -101,6 +249,13 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <button onclick="deconnexionGoogle()" id="btn-logout" style="display:none;">🚪 Déconnecter</button>
   </div>
 </header>
+
+<!-- ⬇️ Barre de progression (repliée par défaut) -->
+<div id="progress-bar" aria-hidden="true">
+  <div id="progress-fill"></div>
+  <div id="progress-label"></div>
+</div>
+
 <nav>
   <button class="tab active" data-tab="parametres">⚙️ Paramètres</button>
   <button class="tab" data-tab="inscriptions">📝 Inscriptions</button>
@@ -115,13 +270,20 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 <!-- ============ PARAMETRES ============ -->
 <section id="sec-parametres" class="section active">
   <div class="card">
-    <h2>Course</h2>
-    <div class="row">
-      <div class="field"><label>Nom de la course</label><input id="input-course-nom" type="text" style="width:320px;" placeholder="Ex: Cross régional 2026"></div>
-      <div class="field"><label>Date</label><input id="input-course-date" type="date"></div>
-      <button onclick="saveCourseInfo()">Enregistrer</button>
-    </div>
+  <h2>Course</h2>
+  <div class="row">
+    <div class="field"><label>Nom de la course</label><input id="input-course-nom" type="text" style="width:280px;" placeholder="Ex: Cross régional 2026"></div>
+    <div class="field"><label>Date</label><input id="input-course-date" type="date"></div>
   </div>
+  <div class="row">
+    <div class="field"><label>Ville</label><input id="input-course-ville" type="text" style="width:180px;" placeholder="Ex: الرباط / Rabat"></div>
+    <div class="field"><label>Titre arabe (en-tête du dossard)</label><input id="input-course-titre-ar" type="text" dir="rtl" style="width:380px;" placeholder="البطولة الإقليمية للعدو الريفي"></div>
+  </div>
+  <div class="row">
+    <button onclick="saveCourseInfo()">Enregistrer</button>
+  </div>
+  <p class="hint">L'année scolaire (ex : 2025-2026) est calculée automatiquement à partir de la date : septembre→décembre = Y/Y+1, janvier→août = Y-1/Y.</p>
+</div>
   <div class="card">
     <h2>Catégories d'âge et courses (vagues)</h2>
     <p class="hint">Année de naissance limite du communiqué administratif (né avant = exclu). Les 4 catégories (tranches de 2 ans) et les <b>8 courses</b> (4 catégories × Garçons/Filles) en découlent ; chaque course = une vague avec son propre départ. Dans chaque course, « Élite » et « Sport pour tous » partent ensemble mais ont chacun leur classement.</p>
@@ -256,16 +418,62 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 <div id="pdf-stage"></div>
 
 <script>
+
+/* ===================== BARRE DE PROGRESSION ===================== */
+const Progress = (() => {
+  const bar   = document.getElementById('progress-bar');
+  const fill  = document.getElementById('progress-fill');
+  const label = document.getElementById('progress-label');
+  let hideTimer = null;
+  const clearTimer = () => { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } };
+
+  function show(txt) {
+    clearTimer();
+    bar.classList.remove('error', 'done', 'indeterminate');
+    bar.classList.add('visible');
+    fill.style.width = '0%';
+    label.textContent = txt || '…';
+  }
+  function set(pct, txt) {
+    bar.classList.remove('indeterminate');
+    fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    if (txt !== undefined) label.textContent = txt;
+  }
+  function indeterminate(txt) {
+    bar.classList.add('indeterminate');
+    if (txt !== undefined) label.textContent = txt;
+  }
+  function done(txt, delay = 1200) {
+    bar.classList.remove('error', 'indeterminate');
+    bar.classList.add('done');
+    fill.style.width = '100%';
+    if (txt !== undefined) label.textContent = txt;
+    clearTimer(); hideTimer = setTimeout(hide, delay);
+  }
+  function error(txt, delay = 4000) {
+    bar.classList.remove('done', 'indeterminate');
+    bar.classList.add('error');
+    fill.style.width = '100%';
+    if (txt !== undefined) label.textContent = txt;
+    clearTimer(); hideTimer = setTimeout(hide, delay);
+  }
+  function hide() {
+    bar.classList.remove('visible');
+    setTimeout(() => { bar.classList.remove('done', 'error'); fill.style.width = '0%'; }, 300);
+  }
+  return { show, set, indeterminate, done, error, hide };
+})();
+
 /* ===================== 5. DONNEES ===================== */
 const STORAGE_KEY = 'smartCrossOrganisateurDB_v2';
 function loadDB() {
   try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) { console.error(e); }
-  return {
-    course: { nom: '', date: '' },
+    return {
+    course: { nom: '', date: '', ville: '', titreAr: 'البطولة الإقليمية للعدو الريفي' },
     anneeLimite: null,
-    vagues: [],     // { id:'categ1_G', catId, sexe, nom, heure:'HH:MM', depart: epochMs|null }
-    coureurs: [],   // { codeMassar, dossard, nomComplet, sexe, anneeNaissance, elite, etablissement, classe }
-    arrivees: []    // { codeMassar, ts, source:'scan'|'manuel' }
+    vagues: [],
+    coureurs: [],
+    arrivees: []
   };
 }
 let DB = loadDB();
@@ -305,7 +513,7 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.007';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.010';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -320,36 +528,54 @@ async function trouverSauvegardeDrive() {
   const data = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.files[0].id}?alt=media`);
   return data && data.db && Array.isArray(data.db.coureurs) ? data : null;
 }
+
 async function sauvegarderOrganisateur() {
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status');
   btn.disabled = true; st.textContent = 'Sauvegarde en cours…'; st.style.color = '#555';
   try {
+    Progress.show('Sauvegarde…');
+    Progress.indeterminate('🔐 Authentification Google…');
     await driveAuth();
-    // Un autre organisateur a-t-il sauvegardé entre-temps ?
+
+    Progress.set(35, '🔍 Vérification de la sauvegarde Drive…');
     const distante = await trouverSauvegardeDrive();
     if (distante && distante.sauvegardeLe > (getSync().drive || 0)) {
       const qui_ = qui(distante) ? ' par ' + qui(distante) : '';
+      Progress.hide();
       if (!confirm(`Une sauvegarde plus récente existe sur le Drive (${new Date(distante.sauvegardeLe).toLocaleString('fr-FR')}${qui_}).\n\nL'écraser avec les données de cet appareil ?`)) {
         showToast('Sauvegarde annulée'); majIndicateurSauvegarde(); return;
       }
+      Progress.show('Sauvegarde…'); Progress.set(50, '📤 Écriture…');
     }
+
+    Progress.set(70, '📤 Envoi de la sauvegarde sur le Drive…');
     const t = Date.now(), majLe = DB.majLe || t;
     const payload = { version: 1, sauvegardeLe: t, par: userEmail || '', parNom: userName || userEmail || '', db: DB };
     await driveUpsert(SAVE_FILE, DRIVE_FOLDER_ID, JSON.stringify(payload));
     setSync({ local: majLe, drive: t, par: userEmail, parNom: userName || userEmail }); dirtySince = null;
     majIndicateurSauvegarde(); showToast('💾 Sauvegarde envoyée sur le Drive');
+    Progress.done('✅ Sauvegardé');
   } catch (e) {
-    st.textContent = '❌ Échec de la sauvegarde'; st.style.color = '#c0392b'; showToast('Échec : ' + e.message);
+    st.textContent = '❌ Échec de la sauvegarde'; st.style.color = '#c0392b';
+    showToast('Échec : ' + e.message);
+    Progress.error('❌ Échec de la sauvegarde');
   } finally { btn.disabled = false; }
 }
+
 // Importation automatique à l'ouverture de session (tout compte organisateur)
 async function chargerSauvegardeDrive() {
   try {
+    Progress.set(60, '☁️ Recherche de la sauvegarde Drive…');
     const data = await trouverSauvegardeDrive();
     if (!data) { showToast('Aucune sauvegarde organisateur sur le Drive'); return; }
     const sy = getSync();
-    if (!(data.sauvegardeLe > (sy.drive || 0))) { if (data.sauvegardeLe === sy.drive) { setSync({ ...sy, par: data.par, parNom: data.parNom }); majIndicateurSauvegarde(); } return; } // cet appareil est déjà à jour
+    if (!(data.sauvegardeLe > (sy.drive || 0))) {
+      if (data.sauvegardeLe === sy.drive) { setSync({ ...sy, par: data.par, parNom: data.parNom }); majIndicateurSauvegarde(); }
+      return;
+    }
     if (isDirty() && !confirm(`Cet appareil contient des modifications non sauvegardées.\n\nLa sauvegarde du Drive (${new Date(data.sauvegardeLe).toLocaleString('fr-FR')}${qui(data) ? ' par ' + qui(data) : ''}) est plus récente.\n\nOK = la charger (les modifications locales seront perdues)\nAnnuler = garder les données de cet appareil`)) return;
+
+    Progress.set(85, '💾 Application des données…');
     DB = Object.assign({ course: { nom: '', date: '' }, anneeLimite: null, vagues: [], coureurs: [], arrivees: [] }, data.db);
     DB.majLe = Date.now(); dirtySince = null;
     setSync({ local: DB.majLe, drive: data.sauvegardeLe, par: data.par, parNom: data.parNom });
@@ -404,9 +630,26 @@ async function afficherUtilisateur() {
     userEmail = u.emailAddress; userName = u.displayName || u.emailAddress; document.getElementById('google-user').textContent = '✅ ' + u.displayName + ' (' + u.emailAddress + ')';
   } catch (e) { document.getElementById('google-user').textContent = '✅ Connecté à Google'; }
 }
+
 async function connexionGoogle() {
-  try { await driveAuth(); await chargerConfigDrive(); await chargerSauvegardeDrive(); } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
+  try {
+    Progress.show('Connexion…');
+    Progress.indeterminate('🔐 Authentification Google…');
+    await driveAuth();
+
+    Progress.set(35, '⚙️ Lecture de la configuration de la course…');
+    await chargerConfigDrive();
+
+    Progress.set(60, '☁️ Restauration de la sauvegarde…');
+    await chargerSauvegardeDrive();
+
+    Progress.done('✅ Prêt');
+  } catch (e) {
+    driveStatus('config-drive-status', '❌ ' + e.message, false);
+    Progress.error('❌ ' + e.message.slice(0, 60));
+  }
 }
+
 // Synchronise automatiquement les réglages (année limite, course, horaires) depuis le fichier publié :
 // un seul événement, donc une seule configuration, quel que soit le compte organisateur connecté.
 async function chargerConfigDrive() {
@@ -448,44 +691,89 @@ async function driveUpsert(name, parent, content) {
   return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
     { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body });
 }
+
 async function importerDepuisDrive() {
   if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); return; }
   try {
+    Progress.show('Import depuis le Drive…');
+    Progress.indeterminate('🔐 Authentification Google…');
     document.getElementById('import-report').innerHTML = 'Connexion à Google…';
     await driveAuth();
+
+    Progress.set(15, '📁 Lecture du dossier Drive…');
     document.getElementById('import-report').innerHTML = 'Lecture du dossier Drive…';
     const q = encodeURIComponent(`'${DRIVE_FOLDER_ID}' in parents and trashed=false and mimeType='application/json' and name!='config.json'`);
     const list = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+    const files = list.files || [];
+    if (!files.length) {
+      Progress.error('⚠️ Aucun fichier trouvé');
+      document.getElementById('import-report').innerHTML = '<div class="warn-banner">Aucun fichier équipe dans le dossier Drive.</div>';
+      return;
+    }
+
     const stats = { n: 0, maj: 0, excl: 0, sansSexe: 0, rep: [] };
-    for (const f of (list.files || [])) {
+    let i = 0;
+    for (const f of files) {
+      i++;
+      const pct = 20 + Math.round((i / files.length) * 75);
+      Progress.set(pct, `📥 ${i}/${files.length} — ${f.name}`);
       try {
         const data = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
         traiterEquipe(data, f.name, stats);
       } catch (err) { stats.rep.push(`${escapeHtml(f.name)} : erreur (${escapeHtml(err.message)})`); }
     }
+
     saveDB(); renderAll();
     afficherRapportImport(stats);
-    if (!list.files || !list.files.length) showToast('Aucun fichier trouvé dans le dossier Drive');
-  } catch (e) { document.getElementById('import-report').innerHTML = `<div class="warn-banner">❌ ${escapeHtml(e.message)}</div>`; }
+    Progress.done(`✅ ${files.length} fichier(s) importé(s)`);
+  } catch (e) {
+    document.getElementById('import-report').innerHTML = `<div class="warn-banner">❌ ${escapeHtml(e.message)}</div>`;
+    Progress.error('❌ Import impossible');
+  }
 }
+
 async function publierConfigSurDrive() {
   if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
   const cfg = { course: DB.course, anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
     courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
   try {
+    Progress.show('Publication…');
+    Progress.indeterminate('🔐 Authentification Google…');
     driveStatus('config-drive-status', 'Connexion à Google…');
     await driveAuth();
+
+    Progress.set(60, '📤 Publication de la configuration…');
     driveStatus('config-drive-status', 'Publication en cours…');
     await driveUpsert('config.json', DRIVE_FOLDER_ID, JSON.stringify(cfg, null, 2));
+
     driveStatus('config-drive-status', `✅ Configuration publiée le ${new Date().toLocaleString('fr-FR')}`, true);
-  } catch (e) { driveStatus('config-drive-status', '❌ ' + e.message, false); }
+    Progress.done('✅ Configuration publiée');
+  } catch (e) {
+    driveStatus('config-drive-status', '❌ ' + e.message, false);
+    Progress.error('❌ ' + e.message.slice(0, 60));
+  }
 }
-(function reprendreSessionDrive() {
+
+(async function reprendreSessionDrive() {
   try {
     const saved = JSON.parse(sessionStorage.getItem('sc_org_drive_token_v2') || 'null');
-    if (saved && saved.exp > Date.now()) { driveToken = saved.t; afficherUtilisateur().then(chargerConfigDrive).then(chargerSauvegardeDrive); }
-  } catch (e) {}
+    if (saved && saved.exp > Date.now()) {
+      driveToken = saved.t;
+      Progress.show('Reprise de session…');
+      Progress.indeterminate('🔐 Reconnexion au Drive…');
+      await afficherUtilisateur();
+
+      Progress.set(35, '⚙️ Lecture de la configuration de la course…');
+      await chargerConfigDrive();
+
+      Progress.set(60, '☁️ Restauration de la sauvegarde…');
+      await chargerSauvegardeDrive();
+
+      Progress.done('✅ Prêt');
+    }
+  } catch (e) { Progress.error('⚠️ ' + e.message.slice(0, 60)); }
 })();
+
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function beep(ok = true) {
@@ -498,7 +786,17 @@ function fmtTime(ms) { // durée -> [h:]mm:ss
   const p = n => String(n).padStart(2, '0');
   return h ? `${h}:${p(m)}:${p(ss)}` : `${p(m)}:${p(ss)}`;
 }
-function fmtClock(ts) { return new Date(ts).toLocaleTimeString('fr-FR'); }
+
+function fmtClock(ts) { return new Date(ts).toLocaleTimeString('fr-FR');
+}
+
+function anneeScolaireFromDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '';
+  const y = d.getFullYear(), m = d.getMonth(); // 0 = janvier
+  return m >= 8 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+}
 
 /* ===================== 6. ONGLETS ===================== */
 document.querySelectorAll('nav .tab').forEach(btn => btn.addEventListener('click', () => {
@@ -541,17 +839,23 @@ function saveAnneeLimite() {
   if (!v || v < 1900) { showToast('Année limite invalide'); return; }
   DB.anneeLimite = v; regenerateVagues(); saveDB(); renderAll(); showToast('Catégories et 8 courses calculées');
 }
+
 function saveCourseInfo() {
   DB.course.nom = document.getElementById('input-course-nom').value.trim();
   DB.course.date = document.getElementById('input-course-date').value;
+  DB.course.ville = document.getElementById('input-course-ville').value.trim();
+  DB.course.titreAr = document.getElementById('input-course-titre-ar').value.trim() || 'البطولة الإقليمية للعدو الريفي';
   saveDB(); renderAll(); showToast('Informations enregistrées');
 }
+
 function setHeureVague(id, val) { const v = DB.vagues.find(x => x.id === id); if (v) v.heure = val; saveDB(); }
 function renderParametres() {
   document.getElementById('input-course-nom').value = DB.course.nom || '';
   document.getElementById('input-course-date').value = DB.course.date || '';
   document.getElementById('input-annee-limite').value = DB.anneeLimite || '';
   document.getElementById('course-name-display').textContent = DB.course.nom || '';
+  document.getElementById('input-course-ville').value = DB.course.ville || '';
+  document.getElementById('input-course-titre-ar').value = DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي';
   const cl = document.getElementById('categories-list');
   cl.innerHTML = DB.anneeLimite
     ? `<p style="color:#b91c1c;font-size:.8em;margin:6px 0;">Né en ${DB.anneeLimite - 1} ou avant : exclu.</p>` + computeCategories(DB.anneeLimite).map(c => `<span class="chip">${escapeHtml(c.nom)}</span>`).join('')
@@ -792,6 +1096,14 @@ function exportCoureursCSV() {
   dl('\uFEFF' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\n'), (DB.course.nom || 'SmartCross') + '_Inscrits.csv', 'text/csv');
 }
 
+/* Tri commun dossards : établissement → dossard (numéro) */
+function trierDossards(list) {
+  return list.sort((a, b) =>
+    (a.etablissement || '').localeCompare(b.etablissement || '', 'fr', { sensitivity: 'base' })
+    || (a.dossard || 0) - (b.dossard || 0)
+  );
+}
+
 /* ===================== 9. DOSSARDS ===================== */
 function renderDossardPreview() {
   const grid = document.getElementById('dossard-preview-grid'); grid.innerHTML = '';
@@ -807,29 +1119,67 @@ function renderDossardPreview() {
         new QRCode(document.getElementById('qr-' + i), { text: String(c.dossard), width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M });
   });
 }
+
 async function generateDossardsPDF() {
-  const list = DB.coureurs.filter(c => c.dossard).sort((a, b) => a.dossard - b.dossard);
+  const list = trierDossards(DB.coureurs.filter(c => c.dossard));
   if (!list.length) { showToast('Aucun coureur numéroté'); return; }
-  const h2c = window.html2canvas; if (!h2c) { showToast('Librairie html2canvas non chargée (connexion internet ?)'); return; }
-  showToast('Génération du PDF… patientez');
-  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' }), stage = document.getElementById('pdf-stage');
-  for (let p = 0; p * 8 < list.length; p++) {
-    stage.innerHTML = ''; const page = document.createElement('div'); page.className = 'pdf-page'; stage.appendChild(page);
-    list.slice(p * 8, p * 8 + 8).forEach((c, k) => {
-      const v = vagueOf(c), card = document.createElement('div'); card.className = 'pdf-card';
-      card.innerHTML = `<div class="course">${v ? escapeHtml(v.nom) : ''}</div><div class="num">${c.dossard}</div>
-        <div class="nom" dir="auto">${escapeHtml(c.nomComplet)}</div><div class="etab" dir="auto">${escapeHtml(c.etablissement || '')}</div>
-        <div class="tag">${c.elite ? '⭐ ÉLITE' : '&nbsp;'}</div><div id="pq-${k}"></div>`;
+  const h2c = window.html2canvas;
+  if (!h2c) { showToast('Librairie html2canvas non chargée (connexion internet ?)'); return; }
+
+  const PAR_PAGE = 2;
+  const nbPages = Math.ceil(list.length / PAR_PAGE);
+  const titreAr = (DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي').trim();
+  const ville   = (DB.course.ville || '').trim();
+  const anneeScolaire = anneeScolaireFromDate(DB.course.date);
+
+  Progress.show(`Génération PDF (${list.length} dossards)…`);
+  Progress.set(3, 'Préparation…');
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const stage = document.getElementById('pdf-stage');
+
+  for (let p = 0; p < nbPages; p++) {
+    stage.innerHTML = '';
+    const page = document.createElement('div');
+    page.className = 'pdf-page';
+    stage.appendChild(page);
+
+    list.slice(p * PAR_PAGE, p * PAR_PAGE + PAR_PAGE).forEach((c, k) => {
+      const cat = catOf(c);
+      const card = document.createElement('div');
+      card.className = 'pdf-card';
+      card.innerHTML = `
+        <div class="titre-ar" dir="rtl">${escapeHtml(titreAr)}</div>
+        <div class="ville" dir="rtl">${escapeHtml(ville)}</div>
+        <div class="etab" dir="auto">${escapeHtml(c.etablissement || '')}</div>
+        <div class="annee-scolaire">${escapeHtml(anneeScolaire)}</div>
+        <div class="nom" dir="auto">${escapeHtml(c.nomComplet)}</div>
+        <div class="sexe">${c.sexe === 'G' ? 'Garçon' : c.sexe === 'F' ? 'Fille' : ''}</div>
+        <div class="sous-cat">${c.elite ? '⭐ ÉLITE' : 'Sport pour tous'}</div>
+        <div class="categorie">${cat ? escapeHtml(cat.nom) : ''}</div>
+        <div class="vide"></div>
+        <div class="num">${c.dossard}</div>
+        <div class="qr-col"><div id="pq-${k}"></div></div>`;
       page.appendChild(card);
-      new QRCode(card.querySelector('#pq-' + k), { text: c.codeMassar, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
+      new QRCode(card.querySelector('#pq-' + k), {
+        text: String(c.dossard), width: 180, height: 180,
+        correctLevel: QRCode.CorrectLevel.M
+      });
     });
-    await new Promise(r => setTimeout(r, 120));
+
+    await new Promise(r => setTimeout(r, 150));
     const canvas = await h2c(page, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
     if (p > 0) doc.addPage();
     doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+
+    Progress.set(3 + Math.round(((p + 1) / nbPages) * 92), `📄 Page ${p + 1}/${nbPages}…`);
   }
+
   stage.innerHTML = '';
-  doc.save((DB.course.nom || 'SmartCross') + '_Dossards.pdf'); showToast('PDF généré');
+  doc.save((DB.course.nom || 'SmartCross') + '_Dossards.pdf');
+  Progress.done(`✅ PDF généré (${list.length} dossards, ${nbPages} pages)`);
+  showToast('PDF généré');
 }
 
 /* ===================== 10. COURSE : DEPARTS ===================== */
