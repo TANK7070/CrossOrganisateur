@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.011</title>
+<title>SmartCross - Organisateur v2.013</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -176,6 +176,12 @@ main { padding:20px 24px; max-width:1150px; margin:0 auto; }
 .pdf-card .tag { font-size:13px; font-weight:700; color:#92400e; }
 #toast { position:fixed; bottom:20px; right:20px; background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:.9em; opacity:0; pointer-events:none; transition:opacity .25s; z-index:999; }
 #toast.show { opacity:1; }
+#role-bar { display:none; background:#e0e7ff; color:#1e3a8a; padding:6px 24px; font-size:.9em; font-weight:600; }
+#gate { position:fixed; inset:0; background:rgba(17,24,39,.94); z-index:900; display:none; align-items:center; justify-content:center; padding:20px; }
+#gate .gate-card { background:#fff; border-radius:14px; padding:24px; max-width:460px; width:100%; max-height:92vh; overflow:auto; }
+#gate .gate-card h2 { margin-bottom:8px; }
+#gate-msg { color:#c0392b; font-size:.9em; min-height:1.2em; margin-top:8px; }
+.pastille { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 @media (max-width:640px) { main { padding:14px; } header { padding:12px 14px; } nav { padding:6px 14px 0; } }
 
 /* ===== SAUVEGARDE ===== */
@@ -262,7 +268,9 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   <button class="tab" data-tab="dossards">🎽 Dossards</button>
   <button class="tab" data-tab="course">🏁 Course</button>
   <button class="tab" data-tab="classements">🏆 Classements</button>
+  <button class="tab" data-tab="equipe" style="display:none;">👥 Équipe</button>
 </nav>
+<div id="role-bar"></div>
 <div id="save-banner"></div>
 
 <main>
@@ -375,12 +383,12 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 
 <!-- ============ COURSE (DEPARTS + ARRIVEE) ============ -->
 <section id="sec-course" class="section">
-  <div class="card">
+  <div class="card" id="card-departs">
     <h2>Départs</h2>
     <p class="hint">Un top départ par course (vague). Le temps de chaque coureur = heure d'arrivée − heure du top de sa vague.</p>
     <div id="departs-list"></div>
   </div>
-  <div class="card">
+  <div class="card" id="card-arrivee">
     <h2>Ligne d'arrivée</h2>
     <div class="row">
       <button class="go" id="btn-scan" onclick="toggleScan()">📷 Démarrer le scan QR</button>
@@ -413,7 +421,40 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   <div class="card"><h3>Sport pour tous</h3><div id="clas-spt"></div></div>
 </section>
 
+<!-- ============ ÉQUIPE (admin) ============ -->
+<section id="sec-equipe" class="section">
+  <div class="card">
+    <h2>👥 Équipe</h2>
+    <p class="hint">Les sessions connectées apparaissent ici. Attribuez à chacune un rôle : son interface s'adapte automatiquement en quelques secondes.</p>
+    <div id="equipe-root"></div>
+  </div>
+</section>
+
 </main>
+<div id="gate">
+  <div class="gate-card">
+    <h2 id="gate-titre"></h2>
+    <p id="gate-texte" class="hint"></p>
+    <div class="field" style="margin:10px 0;"><label>Votre nom</label><input id="gate-nom" type="text" maxlength="40" style="width:100%;" placeholder="Ex : Karim – ligne d'arrivée" onchange="changerNom()"></div>
+    <div id="gate-creation" style="display:none;">
+      <div class="row">
+        <div class="field"><label>Code admin (4 chiffres)</label><input id="gate-code-new" type="password" inputmode="numeric" maxlength="4" style="width:120px;"></div>
+        <div class="field"><label>Confirmer</label><input id="gate-code-new2" type="password" inputmode="numeric" maxlength="4" style="width:120px;" onkeydown="if(event.key==='Enter')creerEvenement()"></div>
+      </div>
+      <button class="go" onclick="creerEvenement()">Créer l'évènement et devenir admin</button>
+    </div>
+    <div id="gate-attente" style="display:none;">
+      <button class="secondary" onclick="document.getElementById('gate-admin').style.display='';document.getElementById('gate-code').focus()">🔑 Je suis l'admin</button>
+      <div id="gate-admin" style="display:none;margin-top:10px;">
+        <div class="row">
+          <div class="field"><label>Code admin</label><input id="gate-code" type="password" inputmode="numeric" maxlength="4" style="width:120px;" onkeydown="if(event.key==='Enter')entrerAdmin()"></div>
+          <button class="go" onclick="entrerAdmin()">Valider</button>
+        </div>
+      </div>
+    </div>
+    <div id="gate-msg"></div>
+  </div>
+</div>
 <div id="toast"></div>
 <div id="pdf-stage"></div>
 
@@ -517,11 +558,11 @@ function majIndicateurSauvegarde() {
   const info = document.getElementById('last-save-info');
   if (info) info.textContent = sy.drive ? `Dernière sauvegarde : ${sy.parNom || sy.par || 'organisateur inconnu'} · ${quandTxt(sy.drive)}` : '';
   const min = dirty && dirtySince ? Math.floor((Date.now() - dirtySince) / 60000) : 0;
-  if (dirty && dirtySince && Date.now() - dirtySince >= RAPPEL_MS) {
+  if (dirty && dirtySince && Date.now() - dirtySince >= RAPPEL_MS && (!monRole || monRole === 'admin')) {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.011';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.013';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -538,6 +579,7 @@ async function trouverSauvegardeDrive() {
 }
 
 async function sauvegarderOrganisateur() {
+  if (monRole && monRole !== 'admin') { showToast('🔒 Seul l\'admin sauvegarde le fichier officiel (le partage des données des autres rôles arrive à l\'étape 2).'); return; }
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status');
   btn.disabled = true; st.textContent = 'Sauvegarde en cours…'; st.style.color = '#555';
   try {
@@ -651,6 +693,9 @@ async function connexionGoogle() {
     Progress.set(60, '☁️ Restauration de la sauvegarde…');
     await chargerSauvegardeDrive();
 
+    Progress.set(85, '👥 Équipe…');
+    await entrerDansEquipe();
+
     Progress.done('✅ Prêt');
   } catch (e) {
     driveStatus('config-drive-status', '❌ ' + e.message, false);
@@ -675,9 +720,17 @@ async function chargerConfigDrive() {
     driveStatus('config-drive-status', `✅ Configuration synchronisée depuis le Drive (année limite ${cfg.anneeLimite}).`, true);
   } catch (e) { driveStatus('config-drive-status', '⚠️ Lecture de la configuration impossible : ' + e.message, false); }
 }
-function deconnexionGoogle() {
-  if (!confirm((isDirty() ? '⚠️ Des modifications ne sont pas sauvegardées sur le Drive : elles seront PERDUES !\n\n' : '') + 'Se déconnecter ? Les données seront effacées de cet appareil et la page va se recharger.')) return;
+async function deconnexionGoogle() {
+  const adminTxt = monRole === 'admin' ? '\n\nVous êtes l\'admin : un autre membre pourra reprendre la main avec le code.' : '';
+  if (!confirm((isDirty() ? '⚠️ Des modifications ne sont pas sauvegardées sur le Drive : elles seront PERDUES !\n\n' : '') + 'Se déconnecter ? Les données seront effacées de cet appareil et la page va se recharger.' + adminTxt)) return;
   quitterSansAlerte = true;
+  if (equipeTimer) { clearInterval(equipeTimer); equipeTimer = null; }
+  try {
+    if (maSession && driveToken) {
+      if (monRole === 'admin') await ecrireFichier(BAIL_FILE, { sessionId: maSession.id, nom: maSession.nom, libere: true });
+      await ecrirePresence(true);
+    }
+  } catch (e) {}
   try { if (driveToken && window.google && google.accounts) google.accounts.oauth2.revoke(driveToken, () => {}); } catch (e) {}
   driveToken = null;
   viderDonneesLocales();
@@ -689,7 +742,7 @@ async function driveUpsert(name, parent, content) {
   const found = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
   if (found.files && found.files.length) {
     try {
-      return await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${found.files[0].id}?uploadType=media&supportsAllDrives=true`,
+      return await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${found.files[0].id}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`,
         { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content });
     } catch (e) {
       // repli de sécurité (droit refusé ou fichier introuvable) : on crée un nouveau fichier, le plus récent est toujours lu
@@ -698,8 +751,265 @@ async function driveUpsert(name, parent, content) {
   }
   const b = 'sc' + Date.now();
   const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parent], mimeType: 'application/json' })}\r\n--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${b}--`;
-  return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
+  return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime',
     { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body });
+}
+
+/* ===================== ÉQUIPE : code admin, présence, rôles (étape 1) =====================
+   Fichiers dans DriveCross :
+   - organisation.json  : empreinte du code admin (créé une seule fois)
+   - bail_admin.json    : qui est l'admin actif (signal de vie toutes les 12 s)
+   - affectations.json  : rôles attribués par l'admin (écrit par l'admin seul)
+   - presence_<id>.json : une présence par session (écrite par la session seule)
+   L'ancienneté d'un signal se mesure avec l'heure des serveurs Drive (pas l'horloge des téléphones). */
+const ORG_FILE = 'organisation.json', AFFECT_FILE = 'affectations.json', BAIL_FILE = 'bail_admin.json', PRES_PREFIX = 'presence_';
+const EQUIPE_TICK_MS = 12000, EN_LIGNE_MS = 45000, BAIL_EXPIRE_MS = 60000, ANCIENNE_MS = 12 * 3600 * 1000;
+const ROLES = { depart: 'Départ', arrivee: 'Arrivée', observateur: 'Observateur' };
+const ONGLETS_PAR_ROLE = {
+  attente: [], admin: ['parametres', 'inscriptions', 'dossards', 'course', 'classements', 'equipe'],
+  depart: ['course', 'classements'], arrivee: ['course', 'classements'], observateur: ['classements']
+};
+let maSession = null;   // { id, nom, premiere } : propre à cet onglet (sessionStorage), pas à l'appareil ni au compte Google
+let monRole = null;     // null = mode local (non connecté) ; sinon 'attente' | 'admin' | 'depart' | 'arrivee' | 'observateur'
+let decalageServeur = 0, equipeTimer = null, equipeBusy = false;
+let equipeEtat = { presences: [], affectations: {}, bail: null, anciennes: false };
+const idCache = {}, cacheContenu = {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Empreinte simple (cyrb53) : le code n'est pas lisible en clair dans le dossier (protection légère, voulue)
+function cyrb53(str, seed = 0) {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507); h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507); h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+function ageMs(modifiedTime) { return Date.now() + decalageServeur - Date.parse(modifiedTime); }
+function bailActif(b) { return !!(b && b.data && !b.data.libere && b.age < BAIL_EXPIRE_MS); }
+
+// --- Accès Drive (dossier commun) ---
+async function listerFichiers(filtre, taille) {
+  const q = encodeURIComponent(`${filtre} and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
+  const r = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&pageSize=${taille || 20}&fields=files(id,name,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  return r.files || [];
+}
+function lireFichier(id) { return driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`); }
+async function ecrireFichier(name, obj) {
+  const content = JSON.stringify(obj);
+  let r = null;
+  if (idCache[name]) {
+    try { r = await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${idCache[name]}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content }); }
+    catch (e) { delete idCache[name]; }
+  }
+  if (!r) r = await driveUpsert(name, DRIVE_FOLDER_ID, content);
+  if (r && r.id) idCache[name] = r.id;
+  if (r && r.modifiedTime) decalageServeur = Date.parse(r.modifiedTime) - Date.now();
+  return r;
+}
+async function lireNomme(name) { // le plus récent des fichiers portant ce nom
+  const liste = await listerFichiers(`name='${name}'`);
+  if (!liste.length) return null;
+  const f = liste[0], c = cacheContenu[f.id];
+  let data;
+  if (c && c.mt === f.modifiedTime) data = c.data; else { data = await lireFichier(f.id); cacheContenu[f.id] = { mt: f.modifiedTime, data }; }
+  return { id: f.id, modifiedTime: f.modifiedTime, age: ageMs(f.modifiedTime), data };
+}
+async function lireOrg() { const f = await lireNomme(ORG_FILE); return f && f.data && f.data.hash ? f.data : null; }
+
+// --- Session (propre à l'onglet) ---
+function chargerSession() {
+  try { maSession = JSON.parse(sessionStorage.getItem('sc_org_session_v1')); } catch (e) { maSession = null; }
+  if (!maSession || !maSession.id) {
+    const alea = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
+    maSession = { id: alea.replace(/-/g, '').slice(0, 8), nom: '', premiere: Date.now() };
+  }
+  if (!maSession.nom) maSession.nom = userName || userEmail || '';
+  sessionStorage.setItem('sc_org_session_v1', JSON.stringify(maSession));
+}
+function ecrirePresence(parti) {
+  return ecrireFichier(PRES_PREFIX + maSession.id + '.json', { id: maSession.id, nom: maSession.nom, email: userEmail, premiere: maSession.premiere, vu: Date.now(), parti: !!parti });
+}
+function gateNom() { return document.getElementById('gate-nom').value.trim(); }
+function gateMsg(t) { document.getElementById('gate-msg').textContent = t || ''; }
+async function changerNom() {
+  const n = gateNom(); if (!n || !maSession) return;
+  maSession.nom = n; sessionStorage.setItem('sc_org_session_v1', JSON.stringify(maSession));
+  try { await ecrirePresence(); } catch (e) {}
+  majBarreRole();
+}
+
+// --- Écran d'accueil (création de l'évènement / attente d'affectation) ---
+function ouvrirGate(mode) {
+  document.getElementById('gate').style.display = 'flex';
+  const nom = document.getElementById('gate-nom'); if (!nom.value) nom.value = maSession.nom || '';
+  gateMsg('');
+  document.getElementById('gate-creation').style.display = mode === 'creation' ? '' : 'none';
+  document.getElementById('gate-attente').style.display = mode === 'attente' ? '' : 'none';
+  document.getElementById('gate-admin').style.display = 'none';
+  document.getElementById('gate-titre').textContent = mode === 'creation' ? '🆕 Première ouverture de l\'évènement' : '⏳ En attente d\'affectation';
+  document.getElementById('gate-texte').textContent = mode === 'creation'
+    ? 'Aucun évènement n\'existe encore dans DriveCross. Choisissez un code admin à 4 chiffres : vous deviendrez l\'admin.'
+    : 'Indiquez votre nom. L\'admin va vous attribuer un rôle ; cet écran se mettra à jour tout seul.';
+}
+function fermerGate() { document.getElementById('gate').style.display = 'none'; }
+
+// --- Entrée dans l'équipe (après connexion Google, ou reprise de session) ---
+async function entrerDansEquipe() {
+  try {
+    if (!userEmail) await afficherUtilisateur();
+    chargerSession();
+    monRole = 'attente'; appliquerRole();
+    await ecrirePresence();
+    const org = await lireOrg();
+    if (!org) { ouvrirGate('creation'); return; }
+    const [bail, aff] = await Promise.all([lireNomme(BAIL_FILE), lireNomme(AFFECT_FILE)]);
+    equipeEtat.affectations = (aff && aff.data && aff.data.affectations) || {};
+    equipeEtat.bail = bail;
+    if (bailActif(bail) && bail.data.sessionId === maSession.id) monRole = 'admin';   // reprise après actualisation de la page
+    else if (equipeEtat.affectations[maSession.id]) monRole = equipeEtat.affectations[maSession.id];
+    appliquerRole();
+    if (monRole === 'attente') ouvrirGate('attente');
+    demarrerEquipe();
+  } catch (e) { showToast('⚠️ Équipe : ' + e.message); }
+}
+function demarrerEquipe() { if (equipeTimer) return; tickEquipe(); equipeTimer = setInterval(tickEquipe, EQUIPE_TICK_MS); }
+
+async function creerEvenement() {
+  const nom = gateNom(), c1 = document.getElementById('gate-code-new').value, c2 = document.getElementById('gate-code-new2').value;
+  if (!nom) return gateMsg('Saisissez votre nom.');
+  if (!/^\d{4}$/.test(c1)) return gateMsg('Le code doit comporter exactement 4 chiffres.');
+  if (c1 !== c2) return gateMsg('Les deux codes ne correspondent pas.');
+  try {
+    await changerNom();
+    if (await lireOrg()) { gateMsg('Un évènement vient d\'être créé par une autre session : utilisez « Je suis l\'admin ».'); ouvrirGate('attente'); return; }
+    const sel = Math.random().toString(36).slice(2, 8);
+    await ecrireFichier(ORG_FILE, { v: 1, sel, hash: cyrb53(sel + ':' + c1), creeLe: Date.now(), par: nom });
+    if (!(await prendreBail())) gateMsg('Impossible de prendre la main, réessayez.');
+  } catch (e) { gateMsg('Échec : ' + e.message); }
+}
+async function entrerAdmin() {
+  const nom = gateNom(), code = document.getElementById('gate-code').value;
+  if (!nom) return gateMsg('Saisissez votre nom.');
+  try {
+    await changerNom();
+    const org = await lireOrg();
+    if (!org) { ouvrirGate('creation'); return; }
+    if (cyrb53(org.sel + ':' + code) !== org.hash) return gateMsg('Code incorrect.');
+    const bail = await lireNomme(BAIL_FILE);
+    if (bailActif(bail) && bail.data.sessionId !== maSession.id &&
+        !confirm(`Un admin est déjà actif : ${bail.data.nom} (signal il y a ${Math.round(bail.age / 1000)} s).\n\nPrendre la main quand même ?`)) return;
+    if (!(await prendreBail())) gateMsg('Une autre session a pris la main au même moment. Réessayez.');
+  } catch (e) { gateMsg('Échec : ' + e.message); }
+}
+async function prendreBail() {
+  await ecrireFichier(BAIL_FILE, { sessionId: maSession.id, nom: maSession.nom, prise: Date.now(), vu: Date.now() });
+  await sleep(1200); // on relit : si une autre session a écrit en même temps, la dernière écriture l'emporte
+  const b = await lireNomme(BAIL_FILE);
+  if (!b || b.data.sessionId !== maSession.id) return false;
+  const aff = await lireNomme(AFFECT_FILE);
+  equipeEtat.affectations = (aff && aff.data && aff.data.affectations) || {};
+  equipeEtat.bail = b;
+  monRole = 'admin'; fermerGate(); appliquerRole(); demarrerEquipe();
+  return true;
+}
+function devenirAttente(msg) {
+  monRole = 'attente'; appliquerRole(); ouvrirGate('attente'); showToast(msg);
+}
+
+// --- Battement toutes les 12 s : présence, bail (admin), affectations (autres) ---
+async function tickEquipe() {
+  if (equipeBusy || !driveToken || !maSession || !monRole) return;
+  equipeBusy = true;
+  try {
+    await ecrirePresence();
+    if (monRole === 'admin') {
+      const bail = await lireNomme(BAIL_FILE);
+      if (!bail || bail.data.sessionId !== maSession.id) { devenirAttente('Un autre admin a pris la main.'); return; }
+      await ecrireFichier(BAIL_FILE, { ...bail.data, vu: Date.now() });
+      equipeEtat.bail = bail;
+      await rafraichirPresences();
+    } else {
+      const [aff, bail] = await Promise.all([lireNomme(AFFECT_FILE), lireNomme(BAIL_FILE)]);
+      equipeEtat.affectations = (aff && aff.data && aff.data.affectations) || {};
+      equipeEtat.bail = bail;
+      const r = equipeEtat.affectations[maSession.id] || 'attente';
+      if (r !== monRole) {
+        monRole = r; appliquerRole();
+        if (r === 'attente') { ouvrirGate('attente'); showToast('Votre rôle a été retiré : en attente d\'affectation'); }
+        else { fermerGate(); showToast('🎭 Nouveau rôle : ' + ROLES[r]); }
+      }
+    }
+    majBarreRole();
+  } catch (e) { /* réseau ou Drive momentanément indisponible : on réessaie au prochain battement */ }
+  finally { equipeBusy = false; }
+}
+async function rafraichirPresences() {
+  const liste = (await listerFichiers("mimeType='application/json'", 200)).filter(f => f.name.startsWith(PRES_PREFIX));
+  const res = await Promise.all(liste.map(async f => {
+    try { const d = await lireFichier(f.id); return { ...d, age: ageMs(f.modifiedTime) }; } catch (e) { return null; }
+  }));
+  equipeEtat.presences = res.filter(Boolean);
+  renderEquipe();
+}
+
+// --- Rôle -> interface ---
+function appliquerRole() {
+  const r = monRole;
+  const ok = !r ? ['parametres', 'inscriptions', 'dossards', 'course', 'classements'] : (ONGLETS_PAR_ROLE[r] || []);
+  document.querySelectorAll('nav .tab').forEach(b => { b.style.display = ok.includes(b.dataset.tab) ? '' : 'none'; });
+  const actif = document.querySelector('nav .tab.active');
+  if (!actif || actif.style.display === 'none') {
+    const premier = [...document.querySelectorAll('nav .tab')].find(b => b.style.display !== 'none');
+    if (premier) premier.click();
+  }
+  const cd = document.getElementById('card-departs'), ca = document.getElementById('card-arrivee');
+  if (cd) cd.style.display = (r === 'arrivee') ? 'none' : '';
+  if (ca) ca.style.display = (r === 'depart') ? 'none' : '';
+  const masquerSave = !!r && r !== 'admin';
+  document.getElementById('btn-save').style.display = masquerSave ? 'none' : '';
+  document.getElementById('save-status').style.display = masquerSave ? 'none' : '';
+  majBarreRole(); renderEquipe();
+}
+function majBarreRole() {
+  const bar = document.getElementById('role-bar');
+  if (!monRole || !maSession) { bar.style.display = 'none'; return; }
+  const lib = monRole === 'admin' ? '👑 Admin' : monRole === 'attente' ? '⏳ En attente d\'affectation' : '🎭 ' + ROLES[monRole];
+  let adm = '';
+  if (monRole !== 'admin') adm = bailActif(equipeEtat.bail) ? ` · Admin : ${escapeHtml(equipeEtat.bail.data.nom)} (en ligne)` : ' · ⚠️ Aucun admin actif';
+  bar.innerHTML = `${lib} — ${escapeHtml(maSession.nom)}${adm}`;
+  bar.style.display = 'block';
+}
+
+// --- Onglet Équipe (admin) ---
+function renderEquipe() {
+  const el = document.getElementById('equipe-root'); if (!el) return;
+  if (monRole !== 'admin') { el.innerHTML = ''; return; }
+  const aff = equipeEtat.affectations;
+  const lignes = equipeEtat.presences
+    .filter(p => equipeEtat.anciennes || p.age < ANCIENNE_MS || aff[p.id])
+    .sort((a, b) => ((a.age < EN_LIGNE_MS && !a.parti) ? 0 : 1) - ((b.age < EN_LIGNE_MS && !b.parti) ? 0 : 1) || String(a.nom).localeCompare(String(b.nom)));
+  const bail = equipeEtat.bail;
+  let h = `<p><b>Admin actif :</b> ${escapeHtml(maSession.nom)} (vous)</p>`;
+  h += '<div class="scroll"><table><thead><tr><th>Nom</th><th>Compte Google</th><th>État</th><th>Rôle</th></tr></thead><tbody>';
+  lignes.forEach(p => {
+    const moi = p.id === maSession.id, enLigne = p.age < EN_LIGNE_MS && !p.parti;
+    const etat = enLigne ? '<span class="pastille" style="background:#16a34a"></span>En ligne'
+      : `<span class="pastille" style="background:#9ca3af"></span>${p.parti ? 'Déconnectée' : 'Vue'} à ${new Date(Date.now() + decalageServeur - p.age).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    const sel = moi ? '<b>Admin (vous)</b>' : `<select onchange="setAffectation('${p.id}', this.value)">
+      <option value="">— en attente —</option>${Object.keys(ROLES).map(k => `<option value="${k}"${aff[p.id] === k ? ' selected' : ''}>${ROLES[k]}</option>`).join('')}</select>`;
+    h += `<tr><td>${escapeHtml(p.nom)}</td><td>${escapeHtml(p.email)}</td><td>${etat}</td><td>${sel}</td></tr>`;
+  });
+  if (!lignes.length) h += '<tr><td colspan="4" class="hint">Aucune autre session pour le moment.</td></tr>';
+  h += `</tbody></table></div><label class="hint"><input type="checkbox" ${equipeEtat.anciennes ? 'checked' : ''} onchange="equipeEtat.anciennes=this.checked;renderEquipe()"> Afficher aussi les sessions de plus de 12 h</label>`;
+  el.innerHTML = h;
+}
+async function setAffectation(id, role) {
+  if (role) equipeEtat.affectations[id] = role; else delete equipeEtat.affectations[id];
+  try {
+    await ecrireFichier(AFFECT_FILE, { v: 1, majLe: Date.now(), par: maSession.nom, affectations: equipeEtat.affectations });
+    showToast('✅ Rôle enregistré');
+  } catch (e) { showToast('Échec : ' + e.message); }
+  renderEquipe();
 }
 
 async function importerDepuisDrive() {
@@ -714,7 +1024,7 @@ async function importerDepuisDrive() {
     document.getElementById('import-report').innerHTML = 'Lecture du dossier Drive…';
     const q = encodeURIComponent(`'${DRIVE_FOLDER_ID}' in parents and trashed=false and mimeType='application/json' and name!='config.json'`);
     const list = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true`);
-    const files = list.files || [];
+    const files = (list.files || []).filter(f => !estFichierSysteme(f.name));
     if (!files.length) {
       Progress.error('⚠️ Aucun fichier trouvé');
       document.getElementById('import-report').innerHTML = '<div class="warn-banner">Aucun fichier équipe dans le dossier Drive.</div>';
@@ -735,7 +1045,7 @@ async function importerDepuisDrive() {
 
     saveDB(); renderAll();
     afficherRapportImport(stats);
-    Progress.done(`✅ ${files.length} fichier(s) importé(s)`);
+    Progress.done(`✅ ${files.length - (stats.ignores || 0)} équipe(s) importée(s)`);
   } catch (e) {
     document.getElementById('import-report').innerHTML = `<div class="warn-banner">❌ ${escapeHtml(e.message)}</div>`;
     Progress.error('❌ Import impossible');
@@ -779,6 +1089,9 @@ async function publierConfigSurDrive() {
       Progress.set(60, '☁️ Restauration de la sauvegarde…');
       await chargerSauvegardeDrive();
 
+      Progress.set(85, '👥 Équipe…');
+      await entrerDansEquipe();
+
       Progress.done('✅ Prêt');
     }
   } catch (e) { Progress.error('⚠️ ' + e.message.slice(0, 60)); }
@@ -819,6 +1132,7 @@ document.querySelectorAll('nav .tab').forEach(btn => btn.addEventListener('click
   if (btn.dataset.tab === 'course') renderCourse();
   if (btn.dataset.tab === 'classements') renderClassements();
   if (btn.dataset.tab === 'inscriptions') renderCoureurs();
+  if (btn.dataset.tab === 'equipe') renderEquipe();
 }));
 
 /* ===================== 7. PARAMETRES : CATEGORIES + 8 VAGUES ===================== */
@@ -927,8 +1241,20 @@ function deleteCoureur(code) {
 }
 function toggleEliteCoureur(code, v) { const c = findByCode(code); if (c) c.elite = v; saveDB(); renderCoureurs(); }
 
+// Fichiers système de l'app (jamais des inscriptions d'équipe) : ignorés à l'import des équipes
+function estFichierSysteme(nom) {
+  const n = String(nom || '').toLowerCase();
+  return n === 'config.json' || n === 'sauvegardeorganisateur.json' || n === 'bail_admin.json'
+    || n === 'organisation.json' || n === 'affectations.json' || n.startsWith('presence_');
+}
+// Un JSON d'inscription d'équipe = objet avec une liste "participants" dont les entrées portent un codeMassar
+function estJsonEquipe(data) {
+  return !!data && typeof data === 'object' && !Array.isArray(data)
+    && Array.isArray(data.participants) && !data.coureurs && !data.vagues
+    && data.participants.every(p => p && typeof p === 'object' && 'codeMassar' in p);
+}
 function traiterEquipe(data, label, stats) {
-  if (!Array.isArray(data.participants)) { stats.rep.push(`${escapeHtml(label)} : erreur (format inattendu)`); return; }
+  if (estFichierSysteme(label) || !estJsonEquipe(data)) { stats.ignores = (stats.ignores || 0) + 1; stats.rep.push(`${escapeHtml(label)} : ignoré (pas une inscription d'équipe)`); return; }
   let fn = 0;
   data.participants.forEach(p => {
     if (!p.codeMassar) return;
@@ -942,7 +1268,7 @@ function traiterEquipe(data, label, stats) {
 }
 function afficherRapportImport(stats) {
   document.getElementById('import-report').innerHTML = `<div class="warn-banner" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">
-    ${stats.n} nouveau(x), ${stats.maj} mis à jour${stats.excl ? `, ${stats.excl} exclu(s) (hors âge)` : ''}${stats.sansSexe ? `, ⚠️ ${stats.sansSexe} sans sexe (à corriger)` : ''}<br>${stats.rep.join('<br>')}</div>`;
+    ${stats.n} nouveau(x), ${stats.maj} mis à jour${stats.excl ? `, ${stats.excl} exclu(s) (hors âge)` : ''}${stats.ignores ? `, ${stats.ignores} fichier(s) ignoré(s) (non-équipe)` : ''}${stats.sansSexe ? `, ⚠️ ${stats.sansSexe} sans sexe (à corriger)` : ''}<br>${stats.rep.join('<br>')}</div>`;
 }
 document.getElementById('import-equipes').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files); const stats = { n: 0, maj: 0, excl: 0, sansSexe: 0, rep: [] };
