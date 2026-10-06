@@ -1,1 +1,1668 @@
-test
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartCross - Organisateur v2.014</title>
+<link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas-pro@1/dist/html2canvas-pro.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+/* ===== 1. BASE ===== */
+* { box-sizing:border-box; }
+body { margin:0; font-family:'Segoe UI', Tahoma, Arial, sans-serif; background:#f2f4f7; color:#1f2937; }
+h1,h2,h3 { margin:0 0 .5em 0; }
+button { cursor:pointer; border:none; border-radius:6px; padding:8px 14px; font-size:.95em; background:#2563eb; color:#fff; transition:background .15s; }
+button:hover { background:#1d4ed8; }
+button.secondary { background:#6b7280; } button.secondary:hover { background:#4b5563; }
+button.danger { background:#dc2626; } button.danger:hover { background:#b91c1c; }
+button.go { background:#059669; } button.go:hover { background:#047857; }
+button.small { padding:3px 9px; font-size:.82em; }
+input, select { padding:7px 9px; border:1px solid #d1d5db; border-radius:6px; font-size:.95em; }
+table { border-collapse:collapse; width:100%; background:#fff; }
+th, td { border:1px solid #e5e7eb; padding:7px 9px; text-align:left; font-size:.88em; }
+th { background:#f3f4f6; }
+.card { background:#fff; border-radius:10px; padding:18px 20px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:12px; }
+.field { display:flex; flex-direction:column; gap:4px; }
+.field label { font-size:.8em; color:#555; font-weight:600; }
+.hint { font-size:.85em; color:#666; }
+.badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:.78em; font-weight:600; background:#dbeafe; color:#1e40af; }
+.badge.elite { background:#fef3c7; color:#92400e; }
+.badge.ok { background:#dcfce7; color:#166534; }
+.badge.warn { background:#fee2e2; color:#991b1b; }
+.scroll { max-height:480px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; }
+.warn-banner { background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:10px 14px; border-radius:8px; font-size:.85em; margin-bottom:14px; }
+tr.row-g td { background:#eff6ff; } tr.row-f td { background:#fdf2f8; }
+.chip { display:inline-block; background:#eef2ff; color:#3730a3; border-radius:16px; padding:4px 12px; font-size:.85em; margin:3px; }
+
+/* ===== 2. HEADER / NAV ===== */
+header { background:#111827; color:#fff; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+header h1 { font-size:1.3em; } header .tagline { font-size:.8em; color:#9ca3af; }
+nav { display:flex; gap:6px; background:#1f2937; padding:8px 24px 0; flex-wrap:wrap; }
+nav button.tab { background:transparent; color:#d1d5db; border-radius:8px 8px 0 0; padding:8px 16px; }
+nav button.tab.active { background:#f2f4f7; color:#111827; font-weight:600; }
+main { padding:20px 24px; max-width:1150px; margin:0 auto; }
+.section { display:none; } .section.active { display:block; }
+
+/* ===== 3. COURSE / ARRIVEE ===== */
+#video-wrap { position:relative; max-width:420px; background:#000; border-radius:10px; overflow:hidden; display:none; }
+#video-wrap video { width:100%; display:block; }
+#last-arrival { font-size:1.1em; padding:12px 14px; border-radius:10px; background:#ecfdf5; border:1px solid #a7f3d0; margin:10px 0; min-height:52px; }
+.big-input { font-size:1.3em; width:160px; }
+
+/* ===== 4. DOSSARDS (aperçu) ===== */
+#dossard-preview-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:12px; }
+.dossard-card { border:2px dashed #9ca3af; border-radius:10px; padding:10px; text-align:center; background:#fff; }
+.dossard-card .num { font-size:2.2em; font-weight:800; line-height:1; }
+.dossard-card .nom { font-weight:600; margin:4px 0; }
+.dossard-card .cat { font-size:.8em; color:#555; }
+.dossard-card .qr-box { margin:6px auto; width:90px; height:90px; }
+
+/* ===== PDF dossards : 2 par page A4, format officiel =====
+   Grille 3 colonnes : [gauche large] [sexe étroit] [droite 230px]
+   L1  titre (1-2)            | ville
+   L2  établissement (1-2)    | année scolaire
+   L3  nom | sexe             | sous-catégorie
+   L4  catégorie (1-2)        | (vide)
+   L5  n° dossard (1-2)       | QR code                         */
+#pdf-stage { position:absolute; left:-12000px; top:0; }
+
+.pdf-page {
+  width: 794px; height: 1123px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 1fr;
+  padding: 0; gap: 0;
+}
+
+.pdf-card {
+  margin: 6px;
+  border: 2px solid #374151;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 1fr 140px 230px;
+  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-areas:
+    "titre titre ville"
+    "etab  etab  annee"
+    "nom   sexe  souscat"
+    "categ categ vide"
+    "num   num   qr";
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* Cellules : filets droit + bas (retirés explicitement ci-dessous) */
+.pdf-card > div {
+  padding: 7px 14px;
+  border-right: 1px solid #9ca3af;
+  border-bottom: 1px solid #9ca3af;
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* Colonne de droite : pas de filet droit ; dernière ligne : pas de filet bas */
+.pdf-card .ville, .pdf-card .annee-scolaire, .pdf-card .sous-cat,
+.pdf-card .vide, .pdf-card .qr-col { border-right: none; }
+.pdf-card .num, .pdf-card .qr-col { border-bottom: none; }
+
+/* --- L1 : titre arabe / ville --- */
+.pdf-card .titre-ar {
+  grid-area: titre; background: #f3f4f6;
+  font-size: 20px; font-weight: 800; color: #111827; line-height: 1.2;
+  display: flex; align-items: center;
+}
+.pdf-card .ville {
+  grid-area: ville; background: #f3f4f6;
+  font-size: 18px; font-weight: 700; color: #111827;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+
+/* --- L2 : établissement / année scolaire --- */
+.pdf-card .etab {
+  grid-area: etab;
+  font-size: 18px; font-weight: 600; color: #111827;
+  display: flex; align-items: center; word-wrap: break-word;
+}
+.pdf-card .annee-scolaire {
+  grid-area: annee;
+  font-size: 15px; color: #6b7280;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* --- L3 : nom | sexe | sous-catégorie --- */
+.pdf-card .nom {
+  grid-area: nom;
+  font-size: 26px; font-weight: 800; color: #111827; line-height: 1.15;
+  display: flex; align-items: center; padding: 10px 14px;
+  word-wrap: break-word; overflow-wrap: anywhere;
+}
+.pdf-card .sexe {
+  grid-area: sexe;
+  font-size: 16px; font-weight: 600; color: #374151;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+.pdf-card .sous-cat {
+  grid-area: souscat;
+  font-size: 16px; font-weight: 700; color: #92400e;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+
+/* --- L4 : catégorie / (vide) --- */
+.pdf-card .categorie {
+  grid-area: categ;
+  font-size: 16px; font-weight: 600; color: #374151;
+  display: flex; align-items: center;
+}
+.pdf-card .vide { grid-area: vide; }
+
+/* --- L5 : n° dossard / QR code --- */
+.pdf-card .num {
+  grid-area: num;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 150px; font-weight: 900; letter-spacing: -6px; line-height: 1;
+  color: #111827;
+}
+.pdf-card .qr-col {
+  grid-area: qr;
+  display: flex; align-items: center; justify-content: center;
+  padding: 10px;
+}
+.pdf-card .etab { font-size:13px; color:#555; }
+.pdf-card .tag { font-size:13px; font-weight:700; color:#92400e; }
+#toast { position:fixed; bottom:20px; right:20px; background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:.9em; opacity:0; pointer-events:none; transition:opacity .25s; z-index:999; }
+#toast.show { opacity:1; }
+#role-bar { display:none; background:#e0e7ff; color:#1e3a8a; padding:6px 24px; font-size:.9em; font-weight:600; }
+#gate { position:fixed; inset:0; background:rgba(17,24,39,.94); z-index:900; display:none; align-items:center; justify-content:center; padding:20px; }
+#gate .gate-card { background:#fff; border-radius:14px; padding:24px; max-width:460px; width:100%; max-height:92vh; overflow:auto; }
+#gate .gate-card h2 { margin-bottom:8px; }
+#gate-msg { color:#c0392b; font-size:.9em; min-height:1.2em; margin-top:8px; }
+.pastille { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+@media (max-width:640px) { main { padding:14px; } header { padding:12px 14px; } nav { padding:6px 14px 0; } }
+
+/* ===== SAUVEGARDE ===== */
+#btn-save { background:#059669; }
+#btn-save.dirty { background:#f59e0b; color:#111; animation:pulse-save 1.4s infinite; }
+@keyframes pulse-save { 0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,.7); } 50% { box-shadow:0 0 0 7px rgba(245,158,11,0); } }
+#save-status { font-size:.82em; margin-left:6px; }
+#save-banner { display:none; position:sticky; top:0; z-index:60; background:#fef3c7; border-bottom:2px solid #f59e0b; color:#92400e; padding:9px 24px; font-size:.9em; font-weight:600; }
+#save-banner button { margin-left:10px; background:#d97706; }
+
+/* ===== 5. TRIS ===== */
+th.sortable { cursor:pointer; user-select:none; position:relative; padding-right:22px; }
+th.sortable:hover { background:#e5e7eb; }
+th.sortable::after { content:'⇅'; position:absolute; right:6px; opacity:.35; font-size:.85em; }
+th.sortable.asc::after  { content:'▲'; opacity:1; color:#2563eb; }
+th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
+
+/* ===== Barre de progression (entre header et onglets) ===== */
+#progress-bar {
+  position: relative;
+  height: 0;
+  overflow: hidden;
+  background: #1f2937;              /* même fond que la nav */
+  display: flex; align-items: center; justify-content: center;
+  transition: height .3s ease;
+  z-index: 5;
+}
+#progress-bar.visible { height: 36px; }
+
+#progress-fill {
+  position: absolute; top: 0; left: 0;
+  height: 3px; width: 0%;
+  background: linear-gradient(90deg, #2563eb, #3b82f6);
+  box-shadow: 0 0 6px rgba(37,99,235,.7);
+  transition: width .35s ease;
+}
+#progress-bar.indeterminate #progress-fill {
+  width: 30% !important;
+  transition: none;
+  animation: progress-slide 1.2s infinite ease-in-out;
+}
+@keyframes progress-slide {
+  0%   { margin-left: -30%; }
+  100% { margin-left: 100%; }
+}
+#progress-bar.error #progress-fill { background:#dc2626; box-shadow:0 0 6px rgba(220,38,38,.7); }
+#progress-bar.done  #progress-fill { background:#059669; box-shadow:0 0 6px rgba(5,150,105,.7); }
+
+#progress-label {
+  position: relative; z-index: 1;
+  color: #d1d5db;
+  font-size: .82em;
+  font-weight: 600;
+  letter-spacing: .2px;
+  padding: 0 12px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+</style>
+</head>
+<body>
+
+<header>
+  <div><h1>🏃 SmartCross — Organisateur</h1><div class="tagline">Inscriptions · Dossards · Départs · Arrivée · Classements</div></div>
+  <div style="text-align:right;">
+    <div id="course-name-display" style="font-weight:600;"></div>
+    <div id="google-user" style="font-size:.85em;margin:4px 0;">🔒 Non connecté au Drive</div>
+    <div style="margin:4px 0;"><button onclick="sauvegarderOrganisateur()" id="btn-save" title="Ctrl+S">💾 Sauvegarder</button><span id="save-status"></span><div id="last-save-info" style="font-size:.78em;color:#9ca3af;margin-top:2px;"></div></div>
+    <button onclick="connexionGoogle()" id="btn-google">🔐 Se connecter avec Google</button>
+    <button onclick="deconnexionGoogle()" id="btn-logout" style="display:none;">🚪 Déconnecter</button>
+  </div>
+</header>
+
+<!-- ⬇️ Barre de progression (repliée par défaut) -->
+<div id="progress-bar" aria-hidden="true">
+  <div id="progress-fill"></div>
+  <div id="progress-label"></div>
+</div>
+
+<nav>
+  <button class="tab active" data-tab="parametres">⚙️ Paramètres</button>
+  <button class="tab" data-tab="inscriptions">📝 Inscriptions</button>
+  <button class="tab" data-tab="dossards">🎽 Dossards</button>
+  <button class="tab" data-tab="course">🏁 Course</button>
+  <button class="tab" data-tab="classements">🏆 Classements</button>
+  <button class="tab" data-tab="equipe" style="display:none;">👥 Équipe</button>
+</nav>
+<div id="role-bar"></div>
+<div id="save-banner"></div>
+
+<main>
+
+<!-- ============ PARAMETRES ============ -->
+<section id="sec-parametres" class="section active">
+  <div class="card">
+  <h2>Course</h2>
+  <div class="row">
+    <div class="field"><label>Nom de la course</label><input id="input-course-nom" type="text" style="width:280px;" placeholder="Ex: Cross régional 2026"></div>
+    <div class="field"><label>Date</label><input id="input-course-date" type="date"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label>Ville</label><input id="input-course-ville" type="text" style="width:180px;" placeholder="Ex: الرباط / Rabat"></div>
+    <div class="field"><label>Titre arabe (en-tête du dossard)</label><input id="input-course-titre-ar" type="text" dir="rtl" style="width:380px;" placeholder="البطولة الإقليمية للعدو الريفي"></div>
+  </div>
+  <div class="row">
+    <button onclick="saveCourseInfo()">Enregistrer</button>
+  </div>
+  <p class="hint">L'année scolaire (ex : 2025-2026) est calculée automatiquement à partir de la date : septembre→décembre = Y/Y+1, janvier→août = Y-1/Y.</p>
+</div>
+  <div class="card">
+    <h2>Catégories d'âge et courses (vagues)</h2>
+    <p class="hint">Année de naissance limite du communiqué administratif (né avant = exclu). Les 4 catégories (tranches de 2 ans) et les <b>8 courses</b> (4 catégories × Garçons/Filles) en découlent ; chaque course = une vague avec son propre départ. Dans chaque course, « Élite » et « Sport pour tous » partent ensemble mais ont chacun leur classement.</p>
+    <div class="row">
+      <div class="field"><label>Année limite</label><input id="input-annee-limite" type="number" placeholder="Ex: 2008" style="width:120px;"></div>
+      <button onclick="saveAnneeLimite()">Calculer les catégories et les 8 courses</button>
+    </div>
+    <div id="categories-list"></div>
+    <div id="vagues-list"></div>
+  </div>
+  <div class="card">
+    <h2>Configuration pour les équipes</h2>
+    <p class="hint">Publiez l'année limite et les 8 courses sur le Drive partagé : les apps des équipes les liront automatiquement.</p>
+    <div class="row">
+      <button class="secondary" onclick="exportConfig()">⬇️ Exporter la configuration (JSON)</button>
+      <button onclick="publierConfigSurDrive()">☁️ Publier sur le Drive</button>
+    </div>
+    <div id="config-drive-status" style="font-size:.85em;margin-top:6px;"></div>
+  </div>
+  <div class="card">
+    <h2>Données</h2>
+    <p class="hint">Attention : la remise à zéro efface inscrits, départs et arrivées.</p>
+    <button class="danger" onclick="resetAll()">Tout effacer</button>
+  </div>
+</section>
+
+<!-- ============ INSCRIPTIONS ============ -->
+<section id="sec-inscriptions" class="section">
+  <div class="card">
+    <h2>Importer les listes des équipes</h2>
+    <p class="hint">Fichiers JSON générés par les profs accompagnateurs (SmartCross - Equipe). Clé primaire = code Massar : réimporter met à jour sans doublon.</p>
+    <div class="row">
+      <input type="file" id="import-equipes" accept=".json" multiple>
+      <button onclick="importerDepuisDrive()">🔄 Importer depuis le Drive</button>
+    </div>
+    <div id="import-report"></div>
+  </div>
+  <div class="card">
+    <h2>Ajouter un coureur manuellement</h2>
+    <div class="row">
+      <div class="field"><label>Code Massar</label><input id="ins-code" type="text" style="width:130px;"></div>
+      <div class="field"><label>Nom complet</label><input id="ins-nom" type="text" style="width:220px;"></div>
+      <div class="field"><label>Sexe</label><select id="ins-sexe"><option value="G">Garçon</option><option value="F">Fille</option></select></div>
+      <div class="field"><label>Année de naissance</label><input id="ins-annee" type="number" style="width:110px;"></div>
+      <div class="field"><label>Établissement</label><input id="ins-etab" type="text" style="width:160px;"></div>
+      <div class="field"><label>Élite</label><input id="ins-elite" type="checkbox"></div>
+      <button onclick="addCoureur()">+ Inscrire</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Coureurs inscrits (<span id="coureurs-count">0</span>)</h2>
+    <div class="row">
+      <input id="search-coureur" type="text" placeholder="Rechercher (nom, code, dossard, établissement)…" style="width:320px;" oninput="renderCoureurs()">
+      <button class="go" onclick="attribuerDossards(false)">🔢 Attribuer les dossards manquants</button>
+      <button class="secondary" onclick="attribuerDossards(true)">Renuméroter tout</button>
+      <button class="secondary" onclick="exportCoureursCSV()">⬇️ Export CSV</button>
+    </div>
+    <p class="hint">L'attribution numérote par course (ordre des vagues), puis par établissement et par nom.</p>
+    <div class="scroll"><table>
+      <thead><tr>
+        <th class="sortable" data-sort="dossard"       onclick="sortCoureursBy('dossard')">Dossard</th>
+        <th class="sortable" data-sort="codeMassar"    onclick="sortCoureursBy('codeMassar')">Code Massar</th>
+        <th class="sortable" data-sort="nomComplet"    onclick="sortCoureursBy('nomComplet')">Nom complet</th>
+        <th class="sortable" data-sort="sexe"          onclick="sortCoureursBy('sexe')">Sexe</th>
+        <th class="sortable" data-sort="annee"         onclick="sortCoureursBy('annee')">Naissance / Catégorie</th>
+        <th class="sortable" data-sort="etablissement" onclick="sortCoureursBy('etablissement')">Établissement</th>
+        <th class="sortable" data-sort="course"        onclick="sortCoureursBy('course')">Course</th>
+        <th class="sortable" data-sort="elite"         onclick="sortCoureursBy('elite')">⭐</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="coureurs-tbody"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ DOSSARDS ============ -->
+<section id="sec-dossards" class="section">
+  <div class="card">
+    <h2>Génération des dossards</h2>
+    <p class="hint">Chaque dossard : n°, nom, établissement, course, mention Élite, et QR code = code Massar (lu à l'arrivée). PDF A4, 8 dossards par page.</p>
+    <div class="row">
+      <button onclick="renderDossardPreview()">🔄 Actualiser l'aperçu</button>
+      <button class="go" onclick="generateDossardsPDF()">📄 Générer le PDF de tous les dossards</button>
+    </div>
+    <div id="dossard-warning"></div>
+  </div>
+  <div class="card"><h3>Aperçu</h3><div id="dossard-preview-grid"></div></div>
+</section>
+
+<!-- ============ COURSE (DEPARTS + ARRIVEE) ============ -->
+<section id="sec-course" class="section">
+  <div class="card" id="card-departs">
+    <h2>Départs</h2>
+    <p class="hint">Un top départ par course (vague). Le temps de chaque coureur = heure d'arrivée − heure du top de sa vague.</p>
+    <div id="departs-list"></div>
+  </div>
+  <div class="card" id="card-arrivee">
+    <h2>Ligne d'arrivée</h2>
+    <div class="row">
+      <button class="go" id="btn-scan" onclick="toggleScan()">📷 Démarrer le scan QR</button>
+      <div class="field"><label>Ou saisir le n° de dossard</label>
+        <div style="display:flex;gap:6px;"><input id="manual-dossard" class="big-input" type="number" inputmode="numeric" onkeydown="if(event.key==='Enter')arriveeManuelle()"><button onclick="arriveeManuelle()">Valider</button></div>
+      </div>
+    </div>
+    <div id="video-wrap"><video id="video" playsinline muted></video></div>
+    <canvas id="scan-canvas" style="display:none;"></canvas>
+    <div id="last-arrival">En attente de la première arrivée…</div>
+    <h3>Arrivées enregistrées (<span id="arrivees-count">0</span>)</h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th><th>Saisie</th><th></th></tr></thead>
+      <tbody id="arrivees-tbody"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ CLASSEMENTS ============ -->
+<section id="sec-classements" class="section">
+  <div class="card">
+    <h2>Classements</h2>
+    <div class="row">
+      <div class="field"><label>Course</label><select id="clas-vague" onchange="renderClassements()"></select></div>
+      <button class="secondary" onclick="exportClassementsCSV()">⬇️ Export CSV (tous les classements)</button>
+    </div>
+    <div id="clas-summary" class="hint"></div>
+  </div>
+  <div class="card"><h3>⭐ Élite</h3><div id="clas-elite"></div></div>
+  <div class="card"><h3>Sport pour tous</h3><div id="clas-spt"></div></div>
+</section>
+
+<!-- ============ ÉQUIPE (admin) ============ -->
+<section id="sec-equipe" class="section">
+  <div class="card">
+    <h2>👥 Équipe</h2>
+    <p class="hint">Les sessions connectées apparaissent ici. Attribuez à chacune un rôle : son interface s'adapte automatiquement en quelques secondes.</p>
+    <div id="equipe-root"></div>
+  </div>
+</section>
+
+</main>
+<div id="gate">
+  <div class="gate-card">
+    <h2 id="gate-titre"></h2>
+    <p id="gate-texte" class="hint"></p>
+    <div class="field" style="margin:10px 0;"><label>Votre nom</label><input id="gate-nom" type="text" maxlength="40" style="width:100%;" placeholder="Ex : Karim – ligne d'arrivée" onchange="changerNom()"></div>
+    <div id="gate-creation" style="display:none;">
+      <div class="row">
+        <div class="field"><label>Code admin (4 chiffres)</label><input id="gate-code-new" type="password" inputmode="numeric" maxlength="4" style="width:120px;"></div>
+        <div class="field"><label>Confirmer</label><input id="gate-code-new2" type="password" inputmode="numeric" maxlength="4" style="width:120px;" onkeydown="if(event.key==='Enter')creerEvenement()"></div>
+      </div>
+      <button class="go" onclick="creerEvenement()">Créer l'évènement et devenir admin</button>
+    </div>
+    <div id="gate-attente" style="display:none;">
+      <button class="secondary" onclick="document.getElementById('gate-admin').style.display='';document.getElementById('gate-code').focus()">🔑 Je suis l'admin</button>
+      <div id="gate-admin" style="display:none;margin-top:10px;">
+        <div class="row">
+          <div class="field"><label>Code admin</label><input id="gate-code" type="password" inputmode="numeric" maxlength="4" style="width:120px;" onkeydown="if(event.key==='Enter')entrerAdmin()"></div>
+          <button class="go" onclick="entrerAdmin()">Valider</button>
+        </div>
+      </div>
+    </div>
+    <div id="gate-msg"></div>
+  </div>
+</div>
+<div id="toast"></div>
+<div id="pdf-stage"></div>
+
+<script>
+
+/* ===================== BARRE DE PROGRESSION ===================== */
+const Progress = (() => {
+  const bar   = document.getElementById('progress-bar');
+  const fill  = document.getElementById('progress-fill');
+  const label = document.getElementById('progress-label');
+  let hideTimer = null;
+  const clearTimer = () => { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } };
+
+  function show(txt) {
+    clearTimer();
+    bar.classList.remove('error', 'done', 'indeterminate');
+    bar.classList.add('visible');
+    fill.style.width = '0%';
+    label.textContent = txt || '…';
+  }
+  function set(pct, txt) {
+    bar.classList.remove('indeterminate');
+    fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    if (txt !== undefined) label.textContent = txt;
+  }
+  function indeterminate(txt) {
+    bar.classList.add('indeterminate');
+    if (txt !== undefined) label.textContent = txt;
+  }
+  function done(txt, delay = 1200) {
+    bar.classList.remove('error', 'indeterminate');
+    bar.classList.add('done');
+    fill.style.width = '100%';
+    if (txt !== undefined) label.textContent = txt;
+    clearTimer(); hideTimer = setTimeout(hide, delay);
+  }
+  function error(txt, delay = 4000) {
+    bar.classList.remove('done', 'indeterminate');
+    bar.classList.add('error');
+    fill.style.width = '100%';
+    if (txt !== undefined) label.textContent = txt;
+    clearTimer(); hideTimer = setTimeout(hide, delay);
+  }
+  function hide() {
+    bar.classList.remove('visible');
+    setTimeout(() => { bar.classList.remove('done', 'error'); fill.style.width = '0%'; }, 300);
+  }
+  return { show, set, indeterminate, done, error, hide };
+})();
+
+/* ===================== 5. DONNEES ===================== */
+const STORAGE_KEY = 'smartCrossOrganisateurDB_v2';
+const SYNC_KEY = 'smartCrossOrganisateurSync_v1';
+// App « vierge » : aucune donnée de la session précédente ne reste sur l'appareil.
+// Appelée à chaque ouverture de page (avant le chargement de DB) et à la déconnexion.
+// Les données réelles vivent sur le Drive (sauvegardeOrganisateur.json) et sont restaurées à la connexion.
+function viderDonneesLocales() {
+  try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(SYNC_KEY); } catch (e) {}
+}
+viderDonneesLocales();
+let quitterSansAlerte = false; // vrai pendant une déconnexion volontaire (pas de double alerte)
+function loadDB() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) { console.error(e); }
+    return {
+    course: { nom: '', date: '', ville: '', titreAr: 'البطولة الإقليمية للعدو الريفي' },
+    anneeLimite: null,
+    vagues: [],
+    coureurs: [],
+    arrivees: []
+  };
+}
+let DB = loadDB();
+// saveDB() = modification faite par l'utilisateur (marque l'état « non sauvegardé sur le Drive »)
+// saveDB(true) = écriture locale silencieuse (synchro venant du Drive), ne marque pas de modification
+function saveDB(silent) {
+  if (!silent) { DB.majLe = Date.now(); if (!dirtySince) dirtySince = DB.majLe; }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+  majIndicateurSauvegarde();
+}
+
+/* ===================== SAUVEGARDE ORGANISATEUR (Drive) + SURVEILLANCE ===================== */
+const SAVE_FILE = 'sauvegardeOrganisateur.json';
+const RAPPEL_MS = 3 * 60 * 1000; // bandeau de rappel après 3 min de modifications non sauvegardées
+let dirtySince = null;
+function getSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || { local: 0, drive: 0 }; } catch (e) { return { local: 0, drive: 0 }; } }
+function setSync(o) { localStorage.setItem(SYNC_KEY, JSON.stringify(o)); }
+function localHasData() { return DB.coureurs.length || DB.arrivees.length || DB.vagues.some(v => v.depart); }
+function isDirty() { return (DB.majLe || 0) > (getSync().local || 0); }
+// Données déjà présentes sur l'appareil avant cette version : à considérer comme non sauvegardées
+if (!DB.majLe && localHasData()) DB.majLe = Date.now();
+if (isDirty()) dirtySince = DB.majLe;
+function majIndicateurSauvegarde() {
+  const btn = document.getElementById('btn-save'), st = document.getElementById('save-status'), bn = document.getElementById('save-banner');
+  if (!btn) return;
+  const dirty = isDirty();
+  btn.classList.toggle('dirty', dirty);
+  const sy = getSync();
+  if (dirty) { st.textContent = '● Modifications non sauvegardées'; st.style.color = '#b45309'; }
+  else if (sy.drive) { st.textContent = '✅ Sauvegardé à ' + new Date(sy.drive).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); st.style.color = '#1e8449'; }
+  else { st.textContent = ''; }
+  const info = document.getElementById('last-save-info');
+  if (info) info.textContent = sy.drive ? `Dernière sauvegarde : ${sy.parNom || sy.par || 'organisateur inconnu'} · ${quandTxt(sy.drive)}` : '';
+  const min = dirty && dirtySince ? Math.floor((Date.now() - dirtySince) / 60000) : 0;
+  if (dirty && dirtySince && Date.now() - dirtySince >= RAPPEL_MS && (!monRole || monRole === 'admin')) {
+    bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
+    bn.style.display = 'block';
+  } else bn.style.display = 'none';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.013';
+}
+setInterval(majIndicateurSauvegarde, 30000);
+window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); sauvegarderOrganisateur(); } });
+
+function qui(d) { return d && (d.parNom || d.par) || ''; }
+function quandTxt(ms) { const d = new Date(ms); return d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+async function trouverSauvegardeDrive() {
+  const q = encodeURIComponent(`name='${SAVE_FILE}' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
+  const f = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&fields=files(id,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  if (!f.files || !f.files.length) return null;
+  const data = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.files[0].id}?alt=media`);
+  return data && data.db && Array.isArray(data.db.coureurs) ? data : null;
+}
+
+async function sauvegarderOrganisateur() {
+  if (monRole && monRole !== 'admin') { showToast('🔒 Seul l\'admin sauvegarde le fichier officiel (le partage des données des autres rôles arrive à l\'étape 2).'); return; }
+  const btn = document.getElementById('btn-save'), st = document.getElementById('save-status');
+  btn.disabled = true; st.textContent = 'Sauvegarde en cours…'; st.style.color = '#555';
+  try {
+    Progress.show('Sauvegarde…');
+    Progress.indeterminate('🔐 Authentification Google…');
+    await driveAuth();
+
+    Progress.set(35, '🔍 Vérification de la sauvegarde Drive…');
+    const distante = await trouverSauvegardeDrive();
+    if (distante && distante.sauvegardeLe > (getSync().drive || 0)) {
+      const qui_ = qui(distante) ? ' par ' + qui(distante) : '';
+      Progress.hide();
+      if (!confirm(`Une sauvegarde plus récente existe sur le Drive (${new Date(distante.sauvegardeLe).toLocaleString('fr-FR')}${qui_}).\n\nL'écraser avec les données de cet appareil ?`)) {
+        showToast('Sauvegarde annulée'); majIndicateurSauvegarde(); return;
+      }
+      Progress.show('Sauvegarde…'); Progress.set(50, '📤 Écriture…');
+    }
+
+    Progress.set(70, '📤 Envoi de la sauvegarde sur le Drive…');
+    const t = Date.now(), majLe = DB.majLe || t;
+    const payload = { version: 1, sauvegardeLe: t, par: userEmail || '', parNom: userName || userEmail || '', db: DB };
+    await driveUpsert(SAVE_FILE, DRIVE_FOLDER_ID, JSON.stringify(payload));
+    setSync({ local: majLe, drive: t, par: userEmail, parNom: userName || userEmail }); dirtySince = null;
+    majIndicateurSauvegarde(); showToast('💾 Sauvegarde envoyée sur le Drive');
+    Progress.done('✅ Sauvegardé');
+  } catch (e) {
+    st.textContent = '❌ Échec de la sauvegarde'; st.style.color = '#c0392b';
+    showToast('Échec : ' + e.message);
+    Progress.error('❌ Échec de la sauvegarde');
+  } finally { btn.disabled = false; }
+}
+
+// Importation automatique à l'ouverture de session (tout compte organisateur)
+async function chargerSauvegardeDrive() {
+  try {
+    Progress.set(60, '☁️ Recherche de la sauvegarde Drive…');
+    const data = await trouverSauvegardeDrive();
+    if (!data) { showToast('Aucune sauvegarde organisateur sur le Drive'); return; }
+    const sy = getSync();
+    if (!(data.sauvegardeLe > (sy.drive || 0))) {
+      if (data.sauvegardeLe === sy.drive) { setSync({ ...sy, par: data.par, parNom: data.parNom }); majIndicateurSauvegarde(); }
+      return;
+    }
+    if (isDirty() && !confirm(`Cet appareil contient des modifications non sauvegardées.\n\nLa sauvegarde du Drive (${new Date(data.sauvegardeLe).toLocaleString('fr-FR')}${qui(data) ? ' par ' + qui(data) : ''}) est plus récente.\n\nOK = la charger (les modifications locales seront perdues)\nAnnuler = garder les données de cet appareil`)) return;
+
+    Progress.set(85, '💾 Application des données…');
+    DB = Object.assign({ course: { nom: '', date: '' }, anneeLimite: null, vagues: [], coureurs: [], arrivees: [] }, data.db);
+    DB.majLe = Date.now(); dirtySince = null;
+    setSync({ local: DB.majLe, drive: data.sauvegardeLe, par: data.par, parNom: data.parNom });
+    saveDB(true); renderAll();
+    showToast(`✅ Sauvegarde du ${new Date(data.sauvegardeLe).toLocaleString('fr-FR')} importée`);
+  } catch (e) { showToast('⚠️ Lecture de la sauvegarde impossible : ' + e.message); }
+}
+
+/* ===================== DRIVE (lecture équipes + publication config) ===================== */
+// ID client OAuth du projet Google Cloud dédié à l'organisateur (à créer/renseigner)
+const GOOGLE_CLIENT_ID = '1067089369377-brtp5i75lt79lju0n90pf1ie9eus5omj.apps.googleusercontent.com';
+// Dossier Drive partagé "DriveCross"
+const DRIVE_FOLDER_ID = '1BLphnNEO3SOoYMvtUD__Mrbtv_-NdhkS';
+// Accès complet au Drive : lecture des fichiers des équipes (comptes différents) + écriture de config.json et de sauvegardeOrganisateur.json
+// (un seul fichier modifiable par tous les organisateurs, même créé par un autre compte)
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+let driveToken = null;
+let userEmail = '', userName = '';
+
+function driveStatus(elId, msg, ok) {
+  const el = document.getElementById(elId);
+  el.textContent = msg; el.style.color = ok === false ? '#c0392b' : ok ? '#1e8449' : '#555';
+}
+function driveAuth() {
+  return new Promise((resolve, reject) => {
+    if (driveToken) return resolve(driveToken);
+    if (!window.google || !google.accounts) return reject(new Error('Service Google indisponible (connexion internet ?)'));
+    google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID, scope: DRIVE_SCOPE,
+      callback: r => {
+        if (r.error) return reject(new Error(r.error));
+        driveToken = r.access_token;
+        sessionStorage.setItem('sc_org_drive_token_v2', JSON.stringify({ t: driveToken, exp: Date.now() + 3300 * 1000 }));
+        afficherUtilisateur();
+        setTimeout(() => driveToken = null, 3300 * 1000);
+        resolve(driveToken);
+      }
+    }).requestAccessToken();
+  });
+}
+async function driveFetch(url, opts) {
+  const r = await fetch(url, { ...opts, headers: { ...(opts && opts.headers), Authorization: 'Bearer ' + driveToken } });
+  if (r.status === 401) { driveToken = null; sessionStorage.removeItem('sc_org_drive_token_v2'); }
+  if (!r.ok) throw new Error('Drive ' + r.status + ' : ' + (await r.text()).slice(0, 150));
+  return r.json();
+}
+async function afficherUtilisateur() {
+  document.getElementById('btn-google').style.display = 'none';
+  document.getElementById('btn-logout').style.display = '';
+  try {
+    const u = (await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)')).user;
+    userEmail = u.emailAddress; userName = u.displayName || u.emailAddress; document.getElementById('google-user').textContent = '✅ ' + u.displayName + ' (' + u.emailAddress + ')';
+  } catch (e) { document.getElementById('google-user').textContent = '✅ Connecté à Google'; }
+}
+
+async function connexionGoogle() {
+  try {
+    Progress.show('Connexion…');
+    Progress.indeterminate('🔐 Authentification Google…');
+    await driveAuth();
+
+    Progress.set(35, '⚙️ Lecture de la configuration de la course…');
+    await chargerConfigDrive();
+
+    Progress.set(60, '☁️ Restauration de la sauvegarde…');
+    await chargerSauvegardeDrive();
+
+    Progress.set(85, '👥 Équipe…');
+    await entrerDansEquipe();
+
+    Progress.done('✅ Prêt');
+  } catch (e) {
+    driveStatus('config-drive-status', '❌ ' + e.message, false);
+    Progress.error('❌ ' + e.message.slice(0, 60));
+  }
+}
+
+// Synchronise automatiquement les réglages (année limite, course, horaires) depuis le fichier publié :
+// un seul événement, donc une seule configuration, quel que soit le compte organisateur connecté.
+async function chargerConfigDrive() {
+  try {
+    const q = encodeURIComponent(`name='config.json' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
+    const f = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+    if (!f.files || !f.files.length) return;
+    const cfg = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.files[0].id}?alt=media`);
+    if (!cfg || !cfg.anneeLimite) return;
+    if (cfg.course) DB.course = cfg.course;
+    DB.anneeLimite = cfg.anneeLimite;
+    regenerateVagues();
+    if (Array.isArray(cfg.courses)) cfg.courses.forEach(c => { const v = DB.vagues.find(x => x.id === c.id); if (v && c.heure) v.heure = c.heure; });
+    saveDB(true); renderAll();
+    driveStatus('config-drive-status', `✅ Configuration synchronisée depuis le Drive (année limite ${cfg.anneeLimite}).`, true);
+  } catch (e) { driveStatus('config-drive-status', '⚠️ Lecture de la configuration impossible : ' + e.message, false); }
+}
+async function deconnexionGoogle() {
+  const adminTxt = monRole === 'admin' ? '\n\nVous êtes l\'admin : un autre membre pourra reprendre la main avec le code.' : '';
+  if (!confirm((isDirty() ? '⚠️ Des modifications ne sont pas sauvegardées sur le Drive : elles seront PERDUES !\n\n' : '') + 'Se déconnecter ? Les données seront effacées de cet appareil et la page va se recharger.' + adminTxt)) return;
+  quitterSansAlerte = true;
+  if (equipeTimer) { clearInterval(equipeTimer); equipeTimer = null; }
+  try {
+    if (maSession && driveToken) {
+      if (monRole === 'admin') await ecrireFichier(BAIL_FILE, { sessionId: maSession.id, nom: maSession.nom, libere: true });
+      await ecrirePresence(true);
+    }
+  } catch (e) {}
+  try { if (driveToken && window.google && google.accounts) google.accounts.oauth2.revoke(driveToken, () => {}); } catch (e) {}
+  driveToken = null;
+  viderDonneesLocales();
+  try { sessionStorage.clear(); } catch (e) {}
+  location.reload();
+}
+async function driveUpsert(name, parent, content) {
+  const q = encodeURIComponent(`name='${name}' and '${parent}' in parents and trashed=false`);
+  const found = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  if (found.files && found.files.length) {
+    try {
+      return await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${found.files[0].id}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content });
+    } catch (e) {
+      // repli de sécurité (droit refusé ou fichier introuvable) : on crée un nouveau fichier, le plus récent est toujours lu
+      if (!/Drive (403|404)/.test(e.message)) throw e;
+    }
+  }
+  const b = 'sc' + Date.now();
+  const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parent], mimeType: 'application/json' })}\r\n--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${content}\r\n--${b}--`;
+  return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime',
+    { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body });
+}
+
+/* ===================== ÉQUIPE : code admin, présence, rôles (étape 1) =====================
+   Fichiers dans DriveCross :
+   - organisation.json  : empreinte du code admin (créé une seule fois)
+   - bail_admin.json    : qui est l'admin actif (signal de vie toutes les 12 s)
+   - affectations.json  : rôles attribués par l'admin (écrit par l'admin seul)
+   - presence_<id>.json : une présence par session (écrite par la session seule)
+   L'ancienneté d'un signal se mesure avec l'heure des serveurs Drive (pas l'horloge des téléphones). */
+const ORG_FILE = 'organisation.json', AFFECT_FILE = 'affectations.json', BAIL_FILE = 'bail_admin.json', PRES_PREFIX = 'presence_';
+const EQUIPE_TICK_MS = 12000, EN_LIGNE_MS = 45000, BAIL_EXPIRE_MS = 60000, ANCIENNE_MS = 12 * 3600 * 1000;
+const ROLES = { depart: 'Départ', arrivee: 'Arrivée', observateur: 'Observateur' };
+const ONGLETS_PAR_ROLE = {
+  attente: [], admin: ['parametres', 'inscriptions', 'dossards', 'course', 'classements', 'equipe'],
+  depart: ['course', 'classements'], arrivee: ['course', 'classements'], observateur: ['classements']
+};
+let maSession = null;   // { id, nom, premiere } : propre à cet onglet (sessionStorage), pas à l'appareil ni au compte Google
+let monRole = null;     // null = mode local (non connecté) ; sinon 'attente' | 'admin' | 'depart' | 'arrivee' | 'observateur'
+let decalageServeur = 0, equipeTimer = null, equipeBusy = false;
+let equipeEtat = { presences: [], affectations: {}, bail: null, anciennes: false };
+const idCache = {}, cacheContenu = {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Empreinte simple (cyrb53) : le code n'est pas lisible en clair dans le dossier (protection légère, voulue)
+function cyrb53(str, seed = 0) {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507); h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507); h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+function ageMs(modifiedTime) { return Date.now() + decalageServeur - Date.parse(modifiedTime); }
+function bailActif(b) { return !!(b && b.data && !b.data.libere && b.age < BAIL_EXPIRE_MS); }
+
+// --- Accès Drive (dossier commun) ---
+async function listerFichiers(filtre, taille) {
+  const q = encodeURIComponent(`${filtre} and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
+  const r = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&pageSize=${taille || 20}&fields=files(id,name,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  return r.files || [];
+}
+function lireFichier(id) { return driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`); }
+async function ecrireFichier(name, obj) {
+  const content = JSON.stringify(obj);
+  let r = null;
+  if (idCache[name]) {
+    try { r = await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${idCache[name]}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content }); }
+    catch (e) { delete idCache[name]; }
+  }
+  if (!r) r = await driveUpsert(name, DRIVE_FOLDER_ID, content);
+  if (r && r.id) idCache[name] = r.id;
+  if (r && r.modifiedTime) decalageServeur = Date.parse(r.modifiedTime) - Date.now();
+  return r;
+}
+async function lireNomme(name) { // le plus récent des fichiers portant ce nom
+  const liste = await listerFichiers(`name='${name}'`);
+  if (!liste.length) return null;
+  const f = liste[0], c = cacheContenu[f.id];
+  let data;
+  if (c && c.mt === f.modifiedTime) data = c.data; else { data = await lireFichier(f.id); cacheContenu[f.id] = { mt: f.modifiedTime, data }; }
+  return { id: f.id, modifiedTime: f.modifiedTime, age: ageMs(f.modifiedTime), data };
+}
+async function lireOrg() { const f = await lireNomme(ORG_FILE); return f && f.data && f.data.hash ? f.data : null; }
+
+// --- Session (propre à l'onglet) ---
+function chargerSession() {
+  try { maSession = JSON.parse(sessionStorage.getItem('sc_org_session_v1')); } catch (e) { maSession = null; }
+  if (!maSession || !maSession.id) {
+    const alea = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
+    maSession = { id: alea.replace(/-/g, '').slice(0, 8), nom: '', premiere: Date.now() };
+  }
+  if (!maSession.nom) maSession.nom = userName || userEmail || '';
+  sessionStorage.setItem('sc_org_session_v1', JSON.stringify(maSession));
+}
+function ecrirePresence(parti) {
+  return ecrireFichier(PRES_PREFIX + maSession.id + '.json', { id: maSession.id, nom: maSession.nom, email: userEmail, premiere: maSession.premiere, vu: Date.now(), parti: !!parti });
+}
+function gateNom() { return document.getElementById('gate-nom').value.trim(); }
+function gateMsg(t) { document.getElementById('gate-msg').textContent = t || ''; }
+async function changerNom() {
+  const n = gateNom(); if (!n || !maSession) return;
+  maSession.nom = n; sessionStorage.setItem('sc_org_session_v1', JSON.stringify(maSession));
+  try { await ecrirePresence(); } catch (e) {}
+  majBarreRole();
+}
+
+// --- Écran d'accueil (création de l'évènement / attente d'affectation) ---
+function ouvrirGate(mode) {
+  document.getElementById('gate').style.display = 'flex';
+  const nom = document.getElementById('gate-nom'); if (!nom.value) nom.value = maSession.nom || '';
+  gateMsg('');
+  document.getElementById('gate-creation').style.display = mode === 'creation' ? '' : 'none';
+  document.getElementById('gate-attente').style.display = mode === 'attente' ? '' : 'none';
+  document.getElementById('gate-admin').style.display = 'none';
+  document.getElementById('gate-titre').textContent = mode === 'creation' ? '🆕 Première ouverture de l\'évènement' : '⏳ En attente d\'affectation';
+  document.getElementById('gate-texte').textContent = mode === 'creation'
+    ? 'Aucun évènement n\'existe encore dans DriveCross. Choisissez un code admin à 4 chiffres : vous deviendrez l\'admin.'
+    : 'Indiquez votre nom. L\'admin va vous attribuer un rôle ; cet écran se mettra à jour tout seul.';
+}
+function fermerGate() { document.getElementById('gate').style.display = 'none'; }
+
+// --- Entrée dans l'équipe (après connexion Google, ou reprise de session) ---
+async function entrerDansEquipe() {
+  try {
+    if (!userEmail) await afficherUtilisateur();
+    chargerSession();
+    monRole = 'attente'; appliquerRole();
+    await ecrirePresence();
+    const org = await lireOrg();
+    if (!org) { ouvrirGate('creation'); return; }
+    const [bail, aff] = await Promise.all([lireNomme(BAIL_FILE), lireNomme(AFFECT_FILE)]);
+    equipeEtat.affectations = (aff && aff.data && aff.data.affectations) || {};
+    equipeEtat.bail = bail;
+    if (bailActif(bail) && bail.data.sessionId === maSession.id) monRole = 'admin';   // reprise après actualisation de la page
+    else if (equipeEtat.affectations[maSession.id]) monRole = equipeEtat.affectations[maSession.id];
+    appliquerRole();
+    if (monRole === 'attente') ouvrirGate('attente');
+    demarrerEquipe();
+  } catch (e) { showToast('⚠️ Équipe : ' + e.message); }
+}
+function demarrerEquipe() { if (equipeTimer) return; tickEquipe(); equipeTimer = setInterval(tickEquipe, EQUIPE_TICK_MS); }
+
+async function creerEvenement() {
+  const nom = gateNom(), c1 = document.getElementById('gate-code-new').value, c2 = document.getElementById('gate-code-new2').value;
+  if (!nom) return gateMsg('Saisissez votre nom.');
+  if (!/^\d{4}$/.test(c1)) return gateMsg('Le code doit comporter exactement 4 chiffres.');
+  if (c1 !== c2) return gateMsg('Les deux codes ne correspondent pas.');
+  try {
+    await changerNom();
+    if (await lireOrg()) { gateMsg('Un évènement vient d\'être créé par une autre session : utilisez « Je suis l\'admin ».'); ouvrirGate('attente'); return; }
+    const sel = Math.random().toString(36).slice(2, 8);
+    await ecrireFichier(ORG_FILE, { v: 1, sel, hash: cyrb53(sel + ':' + c1), creeLe: Date.now(), par: nom });
+    if (!(await prendreBail())) gateMsg('Impossible de prendre la main, réessayez.');
+  } catch (e) { gateMsg('Échec : ' + e.message); }
+}
+async function entrerAdmin() {
+  const nom = gateNom(), code = document.getElementById('gate-code').value;
+  if (!nom) return gateMsg('Saisissez votre nom.');
+  try {
+    await changerNom();
+    const org = await lireOrg();
+    if (!org) { ouvrirGate('creation'); return; }
+    if (cyrb53(org.sel + ':' + code) !== org.hash) return gateMsg('Code incorrect.');
+    const bail = await lireNomme(BAIL_FILE);
+    if (bailActif(bail) && bail.data.sessionId !== maSession.id &&
+        !confirm(`Un admin est déjà actif : ${bail.data.nom} (signal il y a ${Math.round(bail.age / 1000)} s).\n\nPrendre la main quand même ?`)) return;
+    if (!(await prendreBail())) gateMsg('Une autre session a pris la main au même moment. Réessayez.');
+  } catch (e) { gateMsg('Échec : ' + e.message); }
+}
+async function prendreBail() {
+  await ecrireFichier(BAIL_FILE, { sessionId: maSession.id, nom: maSession.nom, prise: Date.now(), vu: Date.now() });
+  await sleep(1200); // on relit : si une autre session a écrit en même temps, la dernière écriture l'emporte
+  const b = await lireNomme(BAIL_FILE);
+  if (!b || b.data.sessionId !== maSession.id) return false;
+  const aff = await lireNomme(AFFECT_FILE);
+  equipeEtat.affectations = (aff && aff.data && aff.data.affectations) || {};
+  equipeEtat.bail = b;
+  monRole = 'admin'; fermerGate(); appliquerRole(); demarrerEquipe();
+  return true;
+}
+function devenirAttente(msg) {
+  monRole = 'attente'; appliquerRole(); ouvrirGate('attente'); showToast(msg);
+}
+
+// --- Battement toutes les 12 s : présence, bail (admin), affectations (autres) ---
+async function tickEquipe() {
+  if (equipeBusy || !driveToken || !maSession || !monRole) return;
+  equipeBusy = true;
+  try {
+    await ecrirePresence();
+    if (monRole === 'admin') {
+      const bail = await lireNomme(BAIL_FILE);
+      if (!bail || bail.data.sessionId !== maSession.id) { devenirAttente('Un autre admin a pris la main.'); return; }
+      await ecrireFichier(BAIL_FILE, { ...bail.data, vu: Date.now() });
+      equipeEtat.bail = bail;
+      await rafraichirPresences();
+    } else {
+      const [aff, bail] = await Promise.all([lireNomme(AFFECT_FILE), lireNomme(BAIL_FILE)]);
+      equipeEtat.affectations = (aff && aff.data && aff.data.affectations) || {};
+      equipeEtat.bail = bail;
+      const r = equipeEtat.affectations[maSession.id] || 'attente';
+      if (r !== monRole) {
+        monRole = r; appliquerRole();
+        if (r === 'attente') { ouvrirGate('attente'); showToast('Votre rôle a été retiré : en attente d\'affectation'); }
+        else { fermerGate(); showToast('🎭 Nouveau rôle : ' + ROLES[r]); }
+      }
+    }
+    majBarreRole();
+  } catch (e) { /* réseau ou Drive momentanément indisponible : on réessaie au prochain battement */ }
+  finally { equipeBusy = false; }
+}
+async function rafraichirPresences() {
+  const liste = (await listerFichiers("mimeType='application/json'", 200)).filter(f => f.name.startsWith(PRES_PREFIX));
+  const res = await Promise.all(liste.map(async f => {
+    try { const d = await lireFichier(f.id); return { ...d, age: ageMs(f.modifiedTime) }; } catch (e) { return null; }
+  }));
+  equipeEtat.presences = res.filter(Boolean);
+  renderEquipe();
+}
+
+// --- Rôle -> interface ---
+function appliquerRole() {
+  const r = monRole;
+  const ok = !r ? ['parametres', 'inscriptions', 'dossards', 'course', 'classements'] : (ONGLETS_PAR_ROLE[r] || []);
+  document.querySelectorAll('nav .tab').forEach(b => { b.style.display = ok.includes(b.dataset.tab) ? '' : 'none'; });
+  const actif = document.querySelector('nav .tab.active');
+  if (!actif || actif.style.display === 'none') {
+    const premier = [...document.querySelectorAll('nav .tab')].find(b => b.style.display !== 'none');
+    if (premier) premier.click();
+  }
+  const cd = document.getElementById('card-departs'), ca = document.getElementById('card-arrivee');
+  if (cd) cd.style.display = (r === 'arrivee') ? 'none' : '';
+  if (ca) ca.style.display = (r === 'depart') ? 'none' : '';
+  const masquerSave = !!r && r !== 'admin';
+  document.getElementById('btn-save').style.display = masquerSave ? 'none' : '';
+  document.getElementById('save-status').style.display = masquerSave ? 'none' : '';
+  majBarreRole(); renderEquipe();
+}
+function majBarreRole() {
+  const bar = document.getElementById('role-bar');
+  if (!monRole || !maSession) { bar.style.display = 'none'; return; }
+  const lib = monRole === 'admin' ? '👑 Admin' : monRole === 'attente' ? '⏳ En attente d\'affectation' : '🎭 ' + ROLES[monRole];
+  let adm = '';
+  if (monRole !== 'admin') adm = bailActif(equipeEtat.bail) ? ` · Admin : ${escapeHtml(equipeEtat.bail.data.nom)} (en ligne)` : ' · ⚠️ Aucun admin actif';
+  bar.innerHTML = `${lib} — ${escapeHtml(maSession.nom)}${adm}`;
+  bar.style.display = 'block';
+}
+
+// --- Onglet Équipe (admin) ---
+function renderEquipe() {
+  const el = document.getElementById('equipe-root'); if (!el) return;
+  if (monRole !== 'admin') { el.innerHTML = ''; return; }
+  const aff = equipeEtat.affectations;
+  const lignes = equipeEtat.presences
+    .filter(p => equipeEtat.anciennes || p.age < ANCIENNE_MS || aff[p.id])
+    .sort((a, b) => ((a.age < EN_LIGNE_MS && !a.parti) ? 0 : 1) - ((b.age < EN_LIGNE_MS && !b.parti) ? 0 : 1) || String(a.nom).localeCompare(String(b.nom)));
+  const bail = equipeEtat.bail;
+  let h = `<p><b>Admin actif :</b> ${escapeHtml(maSession.nom)} (vous)</p>`;
+  h += '<div class="scroll"><table><thead><tr><th>Nom</th><th>Compte Google</th><th>État</th><th>Rôle</th></tr></thead><tbody>';
+  lignes.forEach(p => {
+    const moi = p.id === maSession.id, enLigne = p.age < EN_LIGNE_MS && !p.parti;
+    const etat = enLigne ? '<span class="pastille" style="background:#16a34a"></span>En ligne'
+      : `<span class="pastille" style="background:#9ca3af"></span>${p.parti ? 'Déconnectée' : 'Vue'} à ${new Date(Date.now() + decalageServeur - p.age).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    const sel = moi ? '<b>Admin (vous)</b>' : `<select onchange="setAffectation('${p.id}', this.value)">
+      <option value="">— en attente —</option>${Object.keys(ROLES).map(k => `<option value="${k}"${aff[p.id] === k ? ' selected' : ''}>${ROLES[k]}</option>`).join('')}</select>`;
+    h += `<tr><td>${escapeHtml(p.nom)}</td><td>${escapeHtml(p.email)}</td><td>${etat}</td><td>${sel}</td></tr>`;
+  });
+  if (!lignes.length) h += '<tr><td colspan="4" class="hint">Aucune autre session pour le moment.</td></tr>';
+  h += `</tbody></table></div><label class="hint"><input type="checkbox" ${equipeEtat.anciennes ? 'checked' : ''} onchange="equipeEtat.anciennes=this.checked;renderEquipe()"> Afficher aussi les sessions de plus de 12 h</label>`;
+  el.innerHTML = h;
+}
+async function setAffectation(id, role) {
+  if (role) equipeEtat.affectations[id] = role; else delete equipeEtat.affectations[id];
+  try {
+    await ecrireFichier(AFFECT_FILE, { v: 1, majLe: Date.now(), par: maSession.nom, affectations: equipeEtat.affectations });
+    showToast('✅ Rôle enregistré');
+  } catch (e) { showToast('Échec : ' + e.message); }
+  renderEquipe();
+}
+
+async function importerDepuisDrive() {
+  if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); return; }
+  try {
+    Progress.show('Import depuis le Drive…');
+    Progress.indeterminate('🔐 Authentification Google…');
+    document.getElementById('import-report').innerHTML = 'Connexion à Google…';
+    await driveAuth();
+
+    Progress.set(15, '📁 Lecture du dossier Drive…');
+    document.getElementById('import-report').innerHTML = 'Lecture du dossier Drive…';
+    const q = encodeURIComponent(`'${DRIVE_FOLDER_ID}' in parents and trashed=false and mimeType='application/json' and name!='config.json'`);
+    const list = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+    const files = (list.files || []).filter(f => !estFichierSysteme(f.name));
+    if (!files.length) {
+      Progress.error('⚠️ Aucun fichier trouvé');
+      document.getElementById('import-report').innerHTML = '<div class="warn-banner">Aucun fichier équipe dans le dossier Drive.</div>';
+      return;
+    }
+
+    const stats = { n: 0, maj: 0, excl: 0, sansSexe: 0, rep: [] };
+    let i = 0;
+    for (const f of files) {
+      i++;
+      const pct = 20 + Math.round((i / files.length) * 75);
+      Progress.set(pct, `📥 ${i}/${files.length} — ${f.name}`);
+      try {
+        const data = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+        traiterEquipe(data, f.name, stats);
+      } catch (err) { stats.rep.push(`${escapeHtml(f.name)} : erreur (${escapeHtml(err.message)})`); }
+    }
+
+    saveDB(); renderAll();
+    afficherRapportImport(stats);
+    Progress.done(`✅ ${files.length - (stats.ignores || 0)} équipe(s) importée(s)`);
+  } catch (e) {
+    document.getElementById('import-report').innerHTML = `<div class="warn-banner">❌ ${escapeHtml(e.message)}</div>`;
+    Progress.error('❌ Import impossible');
+  }
+}
+
+async function publierConfigSurDrive() {
+  if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
+  const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
+  try {
+    Progress.show('Publication…');
+    Progress.indeterminate('🔐 Authentification Google…');
+    driveStatus('config-drive-status', 'Connexion à Google…');
+    await driveAuth();
+
+    Progress.set(60, '📤 Publication de la configuration…');
+    driveStatus('config-drive-status', 'Publication en cours…');
+    await driveUpsert('config.json', DRIVE_FOLDER_ID, JSON.stringify(cfg, null, 2));
+
+    driveStatus('config-drive-status', `✅ Configuration publiée le ${new Date().toLocaleString('fr-FR')}`, true);
+    Progress.done('✅ Configuration publiée');
+  } catch (e) {
+    driveStatus('config-drive-status', '❌ ' + e.message, false);
+    Progress.error('❌ ' + e.message.slice(0, 60));
+  }
+}
+
+(async function reprendreSessionDrive() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('sc_org_drive_token_v2') || 'null');
+    if (saved && saved.exp > Date.now()) {
+      driveToken = saved.t;
+      Progress.show('Reprise de session…');
+      Progress.indeterminate('🔐 Reconnexion au Drive…');
+      await afficherUtilisateur();
+
+      Progress.set(35, '⚙️ Lecture de la configuration de la course…');
+      await chargerConfigDrive();
+
+      Progress.set(60, '☁️ Restauration de la sauvegarde…');
+      await chargerSauvegardeDrive();
+
+      Progress.set(85, '👥 Équipe…');
+      await entrerDansEquipe();
+
+      Progress.done('✅ Prêt');
+    }
+  } catch (e) { Progress.error('⚠️ ' + e.message.slice(0, 60)); }
+})();
+
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2600); }
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function beep(ok = true) {
+  try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(); const g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.frequency.value = ok ? 880 : 220; g.gain.value = .15; o.start(); o.stop(a.currentTime + (ok ? .12 : .35)); } catch (e) {}
+}
+function fmtTime(ms) { // durée -> [h:]mm:ss
+  if (ms == null || isNaN(ms)) return '—';
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const p = n => String(n).padStart(2, '0');
+  return h ? `${h}:${p(m)}:${p(ss)}` : `${p(m)}:${p(ss)}`;
+}
+
+function fmtClock(ts) { return new Date(ts).toLocaleTimeString('fr-FR');
+}
+
+function anneeScolaireFromDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '';
+  const y = d.getFullYear(), m = d.getMonth(); // 0 = janvier
+  return m >= 8 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+}
+
+/* ===================== 6. ONGLETS ===================== */
+document.querySelectorAll('nav .tab').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('nav .tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('main .section').forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sec-' + btn.dataset.tab).classList.add('active');
+  if (btn.dataset.tab !== 'course') stopScan();
+  if (btn.dataset.tab === 'dossards') renderDossardPreview();
+  if (btn.dataset.tab === 'course') renderCourse();
+  if (btn.dataset.tab === 'classements') renderClassements();
+  if (btn.dataset.tab === 'inscriptions') renderCoureurs();
+  if (btn.dataset.tab === 'equipe') renderEquipe();
+}));
+
+/* ===================== 7. PARAMETRES : CATEGORIES + 8 VAGUES ===================== */
+function computeCategories(L) {
+  return [
+    { id:'categ1', nom:`Catég. 1 (${L}-${L+1})`, anneeMin:L, anneeMax:L+1 },
+    { id:'categ2', nom:`Catég. 2 (${L+2}-${L+3})`, anneeMin:L+2, anneeMax:L+3 },
+    { id:'categ3', nom:`Catég. 3 (${L+4}-${L+5})`, anneeMin:L+4, anneeMax:L+5 },
+    { id:'categ4', nom:`Catég. 4 (${L+6} et +)`, anneeMin:L+6, anneeMax:null }
+  ];
+}
+function getCategorieForAnnee(annee) {
+  if (!DB.anneeLimite || !annee) return null;
+  if (annee < DB.anneeLimite) return null;
+  return computeCategories(DB.anneeLimite).find(c => annee >= c.anneeMin && (c.anneeMax === null || annee <= c.anneeMax)) || null;
+}
+function regenerateVagues() {
+  const old = {}; DB.vagues.forEach(v => old[v.id] = v);
+  DB.vagues = [];
+  computeCategories(DB.anneeLimite).forEach(c => ['G', 'F'].forEach(sx => {
+    const id = `${c.id}_${sx}`;
+    DB.vagues.push({ id, catId: c.id, sexe: sx, nom: `${c.nom} — ${sx === 'G' ? 'Garçons' : 'Filles'}`,
+      heure: old[id] ? old[id].heure : '', depart: old[id] ? old[id].depart : null });
+  }));
+}
+function saveAnneeLimite() {
+  const v = parseInt(document.getElementById('input-annee-limite').value, 10);
+  if (!v || v < 1900) { showToast('Année limite invalide'); return; }
+  DB.anneeLimite = v; regenerateVagues(); saveDB(); renderAll(); showToast('Catégories et 8 courses calculées');
+}
+
+function saveCourseInfo() {
+  DB.course.nom = document.getElementById('input-course-nom').value.trim();
+  DB.course.date = document.getElementById('input-course-date').value;
+  DB.course.ville = document.getElementById('input-course-ville').value.trim();
+  DB.course.titreAr = document.getElementById('input-course-titre-ar').value.trim() || 'البطولة الإقليمية للعدو الريفي';
+  saveDB(); renderAll(); showToast('Informations enregistrées');
+}
+
+function setHeureVague(id, val) { const v = DB.vagues.find(x => x.id === id); if (v) v.heure = val; saveDB(); }
+function renderParametres() {
+  document.getElementById('input-course-nom').value = DB.course.nom || '';
+  document.getElementById('input-course-date').value = DB.course.date || '';
+  document.getElementById('input-annee-limite').value = DB.anneeLimite || '';
+  document.getElementById('course-name-display').textContent = DB.course.nom || '';
+  document.getElementById('input-course-ville').value = DB.course.ville || '';
+  document.getElementById('input-course-titre-ar').value = DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي';
+  const cl = document.getElementById('categories-list');
+  cl.innerHTML = DB.anneeLimite
+    ? `<p style="color:#b91c1c;font-size:.8em;margin:6px 0;">Né en ${DB.anneeLimite - 1} ou avant : exclu.</p>` + computeCategories(DB.anneeLimite).map(c => `<span class="chip">${escapeHtml(c.nom)}</span>`).join('')
+    : '<p class="hint">Définissez l\'année limite.</p>';
+  document.getElementById('vagues-list').innerHTML = DB.vagues.length
+    ? '<table style="margin-top:12px;"><thead><tr><th>#</th><th>Course (vague)</th><th>Heure de départ prévue</th><th>Inscrits</th></tr></thead><tbody>' +
+      DB.vagues.map((v, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(v.nom)}</td>
+        <td><input type="time" value="${v.heure || ''}" onchange="setHeureVague('${v.id}', this.value)"></td>
+        <td>${coureursDeVague(v.id).length}</td></tr>`).join('') + '</tbody></table>' : '';
+}
+function exportConfig() {
+  if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
+  const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
+  dl(JSON.stringify(cfg, null, 2), (DB.course.nom || 'SmartCross') + '_Config.json', 'application/json');
+}
+function resetAll() {
+  if (!confirm('Tout effacer (inscrits, départs, arrivées) ?')) return;
+  if (!confirm('Vraiment ? Cette action est définitive.')) return;
+  localStorage.removeItem(STORAGE_KEY); DB = loadDB(); saveDB(); renderAll(); showToast('Données effacées (pensez à sauvegarder)');
+}
+function dl(content, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: type + ';charset=utf-8' })); a.download = filename; a.click();
+}
+
+/* ===================== 8. INSCRIPTIONS ===================== */
+function catOf(c) { return getCategorieForAnnee(c.anneeNaissance); }
+function vagueIdOf(c) { const cat = catOf(c); return cat && c.sexe ? `${cat.id}_${c.sexe}` : null; }
+function vagueOf(c) { const id = vagueIdOf(c); return id ? DB.vagues.find(v => v.id === id) || null : null; }
+function coureursDeVague(id) { return DB.coureurs.filter(c => vagueIdOf(c) === id); }
+function findByCode(code) { return DB.coureurs.find(c => c.codeMassar === code); }
+function findByDossard(n) { return DB.coureurs.find(c => c.dossard === n); }
+
+function addCoureur() {
+  const code = document.getElementById('ins-code').value.trim();
+  const nom = document.getElementById('ins-nom').value.trim();
+  const sexe = document.getElementById('ins-sexe').value;
+  const annee = parseInt(document.getElementById('ins-annee').value, 10);
+  const etab = document.getElementById('ins-etab').value.trim();
+  const elite = document.getElementById('ins-elite').checked;
+  if (!code || !nom || !annee) { showToast('Code Massar, nom et année de naissance requis'); return; }
+  if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); return; }
+  if (!getCategorieForAnnee(annee)) { showToast(`Exclu : né en ${annee} (limite ${DB.anneeLimite})`); return; }
+  upsertCoureur({ codeMassar: code, nomComplet: nom, sexe, anneeNaissance: annee, elite, etablissement: etab, classe: '' });
+  saveDB(); ['ins-code','ins-nom','ins-annee'].forEach(i => document.getElementById(i).value = ''); document.getElementById('ins-elite').checked = false;
+  renderAll(); showToast('Coureur inscrit');
+}
+function upsertCoureur(p) {
+  const ex = findByCode(p.codeMassar);
+  if (ex) { Object.assign(ex, p, { dossard: ex.dossard }); return 'maj'; }
+  DB.coureurs.push({ ...p, dossard: null }); return 'new';
+}
+function deleteCoureur(code) {
+  if (!confirm('Supprimer ce coureur (et ses arrivées) ?')) return;
+  DB.coureurs = DB.coureurs.filter(c => c.codeMassar !== code);
+  DB.arrivees = DB.arrivees.filter(a => a.codeMassar !== code);
+  saveDB(); renderAll();
+}
+function toggleEliteCoureur(code, v) { const c = findByCode(code); if (c) c.elite = v; saveDB(); renderCoureurs(); }
+
+// Fichiers système de l'app (jamais des inscriptions d'équipe) : ignorés à l'import des équipes
+function estFichierSysteme(nom) {
+  const n = String(nom || '').toLowerCase();
+  return n === 'config.json' || n === 'sauvegardeorganisateur.json' || n === 'bail_admin.json'
+    || n === 'organisation.json' || n === 'affectations.json' || n.startsWith('presence_');
+}
+// Un JSON d'inscription d'équipe = objet avec une liste "participants" dont les entrées portent un codeMassar
+function estJsonEquipe(data) {
+  return !!data && typeof data === 'object' && !Array.isArray(data)
+    && Array.isArray(data.participants) && !data.coureurs && !data.vagues
+    && data.participants.every(p => p && typeof p === 'object' && 'codeMassar' in p);
+}
+function traiterEquipe(data, label, stats) {
+  if (estFichierSysteme(label) || !estJsonEquipe(data)) { stats.ignores = (stats.ignores || 0) + 1; stats.rep.push(`${escapeHtml(label)} : ignoré (pas une inscription d'équipe)`); return; }
+  let fn = 0;
+  data.participants.forEach(p => {
+    if (!p.codeMassar) return;
+    if (!getCategorieForAnnee(p.anneeNaissance)) { stats.excl++; return; }
+    if (!p.sexe) stats.sansSexe++;
+    const r = upsertCoureur({ codeMassar: p.codeMassar, nomComplet: p.nomComplet, sexe: p.sexe || '', anneeNaissance: p.anneeNaissance,
+      elite: !!p.elite, etablissement: data.etablissement || '', classe: p.classe || '' });
+    r === 'new' ? stats.n++ : stats.maj++; fn++;
+  });
+  stats.rep.push(`${escapeHtml(data.etablissement || label)} : ${fn} participant(s)`);
+}
+function afficherRapportImport(stats) {
+  document.getElementById('import-report').innerHTML = `<div class="warn-banner" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">
+    ${stats.n} nouveau(x), ${stats.maj} mis à jour${stats.excl ? `, ${stats.excl} exclu(s) (hors âge)` : ''}${stats.ignores ? `, ${stats.ignores} fichier(s) ignoré(s) (non-équipe)` : ''}${stats.sansSexe ? `, ⚠️ ${stats.sansSexe} sans sexe (à corriger)` : ''}<br>${stats.rep.join('<br>')}</div>`;
+}
+document.getElementById('import-equipes').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files); const stats = { n: 0, maj: 0, excl: 0, sansSexe: 0, rep: [] };
+  if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); e.target.value = ''; return; }
+  for (const f of files) {
+    try { traiterEquipe(JSON.parse(await f.text()), f.name, stats); }
+    catch (err) { stats.rep.push(`${escapeHtml(f.name)} : erreur (${escapeHtml(err.message)})`); }
+  }
+  saveDB(); e.target.value = ''; renderAll();
+  afficherRapportImport(stats);
+});
+
+function attribuerDossards(tout) {
+  if (tout && !confirm('Renuméroter TOUS les coureurs ? Les dossards déjà imprimés seront invalidés.')) return;
+
+  // --- Helpers internes ---
+  const catIdxOf = cat => { if (!cat) return null; const m = cat.id.match(/categ(\d+)/); return m ? parseInt(m[1], 10) : null; };
+
+  const counters = {};                  // clé "ci_sx_E|S" → prochain numéro séquentiel
+  const startSeq = isElite => isElite ? 901 : 1;
+
+  if (tout) {
+    DB.coureurs.forEach(c => c.dossard = null);
+  } else {
+    // Scanner les dossards existants au format XXXXX pour connaître la prochaine place libre
+    DB.coureurs.forEach(c => {
+      const d = c.dossard;
+      if (!d || d < 10000) return;                    // ignore ancien format et vides
+      const ci  = Math.floor(d / 10000);
+      const sd  = Math.floor((d % 10000) / 1000);
+      const seq = d % 1000;
+      if (ci < 1 || ci > 4 || (sd !== 1 && sd !== 2)) return;
+      const sx  = sd === 1 ? 'G' : 'F';
+      const grp = seq >= 900 ? 'E' : 'S';
+      const k   = `${ci}_${sx}_${grp}`;
+      counters[k] = Math.max(counters[k] || 0, seq);
+    });
+    for (const k in counters) counters[k] += 1;
+  }
+
+  // --- Sélection des coureurs à numéroter ---
+  const cible = DB.coureurs.filter(c => tout || !c.dossard);
+
+  // Tri : par (course/vague) → établissement → code Massar
+  const ordreV = {}; DB.vagues.forEach((v, i) => ordreV[v.id] = i);
+  cible.sort((a, b) =>
+    (ordreV[vagueIdOf(a)] ?? 99) - (ordreV[vagueIdOf(b)] ?? 99)
+    || (a.etablissement || '').localeCompare(b.etablissement || '', 'fr', { sensitivity: 'base' })
+    || (a.codeMassar || '').localeCompare(b.codeMassar || '', 'fr', { numeric: true, sensitivity: 'base' })
+  );
+
+  // --- Attribution ---
+  let attribues = 0, ignores = 0, overflow = false;
+  cible.forEach(c => {
+    const ci = catIdxOf(catOf(c));
+    if (!ci || !c.sexe) { ignores++; return; }        // exclu ou sexe manquant
+    const k = `${ci}_${c.sexe}_${c.elite ? 'E' : 'S'}`;
+    if (counters[k] === undefined) counters[k] = startSeq(c.elite);
+
+    const seq = counters[k]++;
+    if (!c.elite && seq >= 900) overflow = true;      // dépasse la zone SPT (<900)
+    if (c.elite && seq > 999)   overflow = true;      // dépasse la zone Élite
+
+    const sexDigit = c.sexe === 'G' ? 1 : 2;
+    c.dossard = ci * 10000 + sexDigit * 1000 + seq;
+    attribues++;
+  });
+
+  saveDB(); renderAll();
+  let msg = `${attribues} dossard(s) attribué(s)`;
+  if (ignores)  msg += ` — ${ignores} ignoré(s) (exclu / sexe manquant)`;
+  if (overflow) msg += ` — ⚠️ dépassement de capacité (max 899 SPT / 99 Élite par groupe)`;
+  showToast(msg);
+}
+
+/* ---------- Tri de la grille Inscriptions ---------- */
+let coureursSort = { col: null, dir: 'asc' }; // col = null → tri par défaut : établissement → code Massar
+
+const COUREURS_SORT_GETTERS = {
+  dossard:       c => c.dossard || 1e9,                       // sans dossard → en fin
+  codeMassar:    c => c.codeMassar || '',
+  nomComplet:    c => c.nomComplet || '',
+  sexe:          c => c.sexe || '',
+  annee:         c => c.anneeNaissance || 0,
+  etablissement: c => c.etablissement || '',
+  course:        c => { const v = vagueOf(c); return v ? v.nom : ''; },
+  elite:         c => c.elite ? 1 : 0
+};
+
+function sortCoureurs(list) {
+  const { col, dir } = coureursSort;
+  const mul = dir === 'desc' ? -1 : 1;
+
+  // Tri par défaut : établissement (alphabétique) puis code Massar
+  if (!col) {
+    return list.sort((a, b) =>
+      (a.etablissement || '').localeCompare(b.etablissement || '', 'fr', { sensitivity: 'base' })
+      || (a.codeMassar || '').localeCompare(b.codeMassar || '', 'fr', { numeric: true, sensitivity: 'base' })
+    );
+  }
+
+  const get = COUREURS_SORT_GETTERS[col];
+  return list.sort((a, b) => {
+    const va = get(a), vb = get(b);
+    let cmp;
+    if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+    else cmp = String(va).localeCompare(String(vb), 'fr', { sensitivity: 'base', numeric: true });
+    // Second critère stable : code Massar
+    if (cmp === 0 && col !== 'codeMassar')
+      cmp = (a.codeMassar || '').localeCompare(b.codeMassar || '', 'fr', { numeric: true, sensitivity: 'base' });
+    return cmp * mul;
+  });
+}
+
+function sortCoureursBy(col) {
+  if (coureursSort.col === col) {
+    coureursSort.dir = coureursSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    coureursSort.col = col;
+    coureursSort.dir = 'asc';
+  }
+  renderCoureurs();
+}
+
+function updateCoureursSortIndicators() {
+  document.querySelectorAll('#sec-inscriptions th.sortable').forEach(th => {
+    th.classList.remove('asc', 'desc');
+    if (th.dataset.sort === coureursSort.col) th.classList.add(coureursSort.dir);
+  });
+}
+
+function renderCoureurs() {
+  const q = (document.getElementById('search-coureur').value || '').toLowerCase();
+  const list = DB.coureurs
+    .filter(c => !q || `${c.nomComplet} ${c.codeMassar} ${c.dossard || ''} ${c.etablissement}`.toLowerCase().includes(q));
+
+  sortCoureurs(list);
+
+  document.getElementById('coureurs-count').textContent = DB.coureurs.length;
+  document.getElementById('coureurs-tbody').innerHTML = list.map(c => {
+    const cat = catOf(c), v = vagueOf(c);
+    return `<tr class="${c.sexe === 'G' ? 'row-g' : c.sexe === 'F' ? 'row-f' : ''}">
+      <td>${c.dossard ? `<span class="badge">#${c.dossard}</span>` : '—'}</td><td>${escapeHtml(c.codeMassar)}</td>
+      <td dir="auto">${escapeHtml(c.nomComplet)}</td><td>${c.sexe || '<span class="badge warn">?</span>'}</td>
+      <td>${c.anneeNaissance} — ${cat ? escapeHtml(cat.nom) : '<span class="badge warn">exclu</span>'}</td>
+      <td dir="auto">${escapeHtml(c.etablissement || '—')}</td><td>${v ? escapeHtml(v.nom) : '—'}</td>
+      <td><input type="checkbox" ${c.elite ? 'checked' : ''} onchange="toggleEliteCoureur('${c.codeMassar}', this.checked)"></td>
+      <td><button class="danger small" onclick="deleteCoureur('${c.codeMassar}')">✕</button></td></tr>`;
+  }).join('');
+
+  updateCoureursSortIndicators();
+}
+
+function exportCoureursCSV() {
+  if (!DB.coureurs.length) { showToast('Aucun coureur'); return; }
+  const rows = [['Dossard','Code Massar','Nom complet','Sexe','Année naissance','Catégorie','Sous-catégorie','Établissement','Classe','Course']];
+  DB.coureurs.slice().sort((a, b) => (a.dossard || 1e9) - (b.dossard || 1e9)).forEach(c => {
+    const cat = catOf(c), v = vagueOf(c);
+    rows.push([c.dossard || '', c.codeMassar, c.nomComplet, c.sexe, c.anneeNaissance, cat ? cat.nom : 'Exclu', c.elite ? 'Elite' : 'Sport pour tous', c.etablissement, c.classe, v ? v.nom : '']);
+  });
+  dl('\uFEFF' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\n'), (DB.course.nom || 'SmartCross') + '_Inscrits.csv', 'text/csv');
+}
+
+/* Tri commun dossards : établissement → dossard (numéro) */
+function trierDossards(list) {
+  return list.sort((a, b) =>
+    (a.etablissement || '').localeCompare(b.etablissement || '', 'fr', { sensitivity: 'base' })
+    || (a.dossard || 0) - (b.dossard || 0)
+  );
+}
+
+/* ===================== 9. DOSSARDS ===================== */
+function renderDossardPreview() {
+  const grid = document.getElementById('dossard-preview-grid'); grid.innerHTML = '';
+  const manquants = DB.coureurs.filter(c => !c.dossard).length;
+  document.getElementById('dossard-warning').innerHTML = manquants ? `<div class="warn-banner">⚠️ ${manquants} coureur(s) sans dossard : attribuez-les dans l'onglet Inscriptions.</div>` : '';
+  const list = DB.coureurs.filter(c => c.dossard).sort((a, b) => a.dossard - b.dossard);
+  if (!list.length) { grid.innerHTML = '<p class="hint">Aucun coureur numéroté.</p>'; return; }
+  list.forEach((c, i) => {
+    const v = vagueOf(c), card = document.createElement('div'); card.className = 'dossard-card';
+    card.innerHTML = `<div class="num">#${c.dossard}</div><div class="nom" dir="auto">${escapeHtml(c.nomComplet)}</div>
+      <div class="cat">${v ? escapeHtml(v.nom) : ''}${c.elite ? ' — ⭐ Élite' : ''}</div><div class="qr-box" id="qr-${i}"></div>`;
+    grid.appendChild(card);
+        new QRCode(document.getElementById('qr-' + i), { text: String(c.dossard), width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M });
+  });
+}
+
+async function generateDossardsPDF() {
+  const list = trierDossards(DB.coureurs.filter(c => c.dossard));
+  if (!list.length) { showToast('Aucun coureur numéroté'); return; }
+  const h2c = window.html2canvas;
+  if (!h2c) { showToast('Librairie html2canvas non chargée (connexion internet ?)'); return; }
+
+  const PAR_PAGE = 2;
+  const nbPages = Math.ceil(list.length / PAR_PAGE);
+  const titreAr = (DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي').trim();
+  const ville   = (DB.course.ville || '').trim();
+  const anneeScolaire = anneeScolaireFromDate(DB.course.date);
+
+  Progress.show(`Génération PDF (${list.length} dossards)…`);
+  Progress.set(3, 'Préparation…');
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const stage = document.getElementById('pdf-stage');
+
+  for (let p = 0; p < nbPages; p++) {
+    stage.innerHTML = '';
+    const page = document.createElement('div');
+    page.className = 'pdf-page';
+    stage.appendChild(page);
+
+    list.slice(p * PAR_PAGE, p * PAR_PAGE + PAR_PAGE).forEach((c, k) => {
+      const cat = catOf(c);
+      const card = document.createElement('div');
+      card.className = 'pdf-card';
+      card.innerHTML = `
+        <div class="titre-ar" dir="rtl">${escapeHtml(titreAr)}</div>
+        <div class="ville" dir="rtl">${escapeHtml(ville)}</div>
+        <div class="etab" dir="auto">${escapeHtml(c.etablissement || '')}</div>
+        <div class="annee-scolaire">${escapeHtml(anneeScolaire)}</div>
+        <div class="nom" dir="auto">${escapeHtml(c.nomComplet)}</div>
+        <div class="sexe">${c.sexe === 'G' ? 'Garçon' : c.sexe === 'F' ? 'Fille' : ''}</div>
+        <div class="sous-cat">${c.elite ? '⭐ ÉLITE' : 'Sport pour tous'}</div>
+        <div class="categorie">${cat ? escapeHtml(cat.nom) : ''}</div>
+        <div class="vide"></div>
+        <div class="num">${c.dossard}</div>
+        <div class="qr-col"><div id="pq-${k}"></div></div>`;
+      page.appendChild(card);
+      new QRCode(card.querySelector('#pq-' + k), {
+        text: String(c.dossard), width: 180, height: 180,
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    });
+
+    await new Promise(r => setTimeout(r, 150));
+    const canvas = await h2c(page, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    if (p > 0) doc.addPage();
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+
+    Progress.set(3 + Math.round(((p + 1) / nbPages) * 92), `📄 Page ${p + 1}/${nbPages}…`);
+  }
+
+  stage.innerHTML = '';
+  doc.save((DB.course.nom || 'SmartCross') + '_Dossards.pdf');
+  Progress.done(`✅ PDF généré (${list.length} dossards, ${nbPages} pages)`);
+  showToast('PDF généré');
+}
+
+/* ===================== 10. COURSE : DEPARTS ===================== */
+function topDepart(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v) return;
+  if (v.depart && !confirm('Cette course a déjà un top départ. Le remplacer ?')) return;
+  v.depart = Date.now(); saveDB(); renderCourse(); showToast(`Top départ : ${v.nom}`);
+}
+function annulerDepart(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v || !confirm('Annuler le départ de cette course ?')) return;
+  v.depart = null; saveDB(); renderCourse();
+}
+function renderCourse() {
+  document.getElementById('departs-list').innerHTML = DB.vagues.length
+    ? '<table><thead><tr><th>Course</th><th>Prévu</th><th>Inscrits</th><th>Arrivés</th><th>Départ réel</th><th></th></tr></thead><tbody>' +
+      DB.vagues.map(v => {
+        const ins = coureursDeVague(v.id), arr = ins.filter(c => DB.arrivees.some(a => a.codeMassar === c.codeMassar)).length;
+        return `<tr><td>${escapeHtml(v.nom)}</td><td>${v.heure || '—'}</td><td>${ins.length}</td><td>${arr}</td>
+          <td>${v.depart ? `<span class="badge ok">${fmtClock(v.depart)}</span>` : '<span class="badge">Non parti</span>'}</td>
+          <td>${v.depart ? `<button class="secondary small" onclick="annulerDepart('${v.id}')">Annuler</button>` : `<button class="go" onclick="topDepart('${v.id}')">🚦 Top départ</button>`}</td></tr>`;
+      }).join('') + '</tbody></table>'
+    : '<p class="hint">Définissez l\'année limite (Paramètres) pour générer les 8 courses.</p>';
+  renderArrivees();
+}
+
+/* ===================== 11. COURSE : ARRIVEE (scan QR / manuel) ===================== */
+let stream = null, scanning = false, lastScan = { code: '', t: 0 };
+async function toggleScan() { scanning ? stopScan() : startScan(); }
+async function startScan() {
+  if (!window.jsQR) { showToast('Librairie jsQR non chargée (connexion internet ?)'); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    const video = document.getElementById('video'); video.srcObject = stream; await video.play();
+    document.getElementById('video-wrap').style.display = 'block';
+    document.getElementById('btn-scan').textContent = '⏹ Arrêter le scan'; scanning = true; scanLoop();
+  } catch (err) { showToast('Caméra inaccessible (HTTPS requis + autorisation) : ' + err.message); }
+}
+function stopScan() {
+  scanning = false; if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  document.getElementById('video-wrap').style.display = 'none';
+  const b = document.getElementById('btn-scan'); if (b) b.textContent = '📷 Démarrer le scan QR';
+}
+function scanLoop() {
+  if (!scanning) return;
+  const video = document.getElementById('video'), canvas = document.getElementById('scan-canvas');
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    const w = Math.min(640, video.videoWidth), h = Math.round(video.videoHeight * w / video.videoWidth);
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(video, 0, 0, w, h);
+    const code = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+    if (code && code.data) {
+      const now = Date.now();
+      if (!(code.data === lastScan.code && now - lastScan.t < 3000)) { lastScan = { code: code.data, t: now }; enregistrerArrivee(code.data.trim(), 'scan', now); }
+    }
+  }
+  requestAnimationFrame(scanLoop);
+}
+function arriveeManuelle() {
+  const inp = document.getElementById('manual-dossard'), n = parseInt(inp.value, 10), now = Date.now();
+  if (!n) return; const c = findByDossard(n);
+  if (!c) { showFeedback(`❌ Dossard ${n} inconnu`, false); beep(false); }
+  else enregistrerArrivee(c.codeMassar, 'manuel', now);
+  inp.value = ''; inp.focus();
+}
+function showFeedback(html, ok) {
+  const el = document.getElementById('last-arrival'); el.innerHTML = html;
+  el.style.background = ok ? '#ecfdf5' : '#fef2f2'; el.style.borderColor = ok ? '#a7f3d0' : '#fecaca';
+}
+
+function enregistrerArrivee(code, source, ts) {
+  code = String(code).trim();
+  let c = null;
+  // 1) Si c'est un nombre → chercher par dossard
+  if (/^\d+$/.test(code)) c = findByDossard(parseInt(code, 10));
+  // 2) Sinon (ou si non trouvé) → repli sur code Massar (utile pour anciens QR)
+  if (!c) c = findByCode(code);
+
+  if (!c) { showFeedback(`❌ QR inconnu : ${escapeHtml(code)}`, false); beep(false); return; }
+
+  const v = vagueOf(c);
+  if (!v || !v.depart) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : course non partie`, false); beep(false); return; }
+  if (DB.arrivees.some(a => a.codeMassar === c.codeMassar)) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : déjà enregistré`, false); beep(false); return; }
+
+  DB.arrivees.push({ codeMassar: c.codeMassar, ts, source });
+  saveDB(); beep(true);
+
+  const rang = classementDe(v.id, !!c.elite).findIndex(r => r.c.codeMassar === c.codeMassar) + 1;
+  showFeedback(`✅ <b>#${c.dossard}</b> <span dir="auto">${escapeHtml(c.nomComplet)}</span> — ${fmtTime(ts - v.depart)} — ${rang}ᵉ ${c.elite ? 'Élite' : 'Sport pour tous'} (${escapeHtml(v.nom)})`, true);
+  renderCourse();
+}
+
+function supprimerArrivee(code) {
+  if (!confirm('Supprimer cette arrivée ?')) return;
+  DB.arrivees = DB.arrivees.filter(a => a.codeMassar !== code); saveDB(); renderCourse();
+}
+function renderArrivees() {
+  document.getElementById('arrivees-count').textContent = DB.arrivees.length;
+  document.getElementById('arrivees-tbody').innerHTML = DB.arrivees.slice().sort((a, b) => b.ts - a.ts).map(a => {
+    const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null;
+    return `<tr><td>${fmtClock(a.ts)}</td><td>${c ? '#' + c.dossard : '?'}</td><td dir="auto">${c ? escapeHtml(c.nomComplet) : escapeHtml(a.codeMassar)}</td>
+      <td>${v ? escapeHtml(v.nom) : '—'}</td><td>${v && v.depart ? fmtTime(a.ts - v.depart) : '—'}</td><td>${a.source}</td>
+      <td><button class="danger small" onclick="supprimerArrivee('${a.codeMassar}')">✕</button></td></tr>`;
+  }).join('');
+}
+
+/* ===================== 12. CLASSEMENTS ===================== */
+function classementDe(vagueId, elite) {
+  const v = DB.vagues.find(x => x.id === vagueId); if (!v || !v.depart) return [];
+  return coureursDeVague(vagueId).filter(c => !!c.elite === elite)
+    .map(c => ({ c, a: DB.arrivees.find(x => x.codeMassar === c.codeMassar) })).filter(r => r.a)
+    .sort((x, y) => x.a.ts - y.a.ts).map(r => ({ c: r.c, ts: r.a.ts, temps: r.a.ts - v.depart }));
+}
+function tableClassement(vagueId, elite) {
+  const rows = classementDe(vagueId, elite);
+  const total = coureursDeVague(vagueId).filter(c => !!c.elite === elite).length;
+  const head = `<p class="hint">${rows.length} arrivé(s) sur ${total} inscrit(s)</p>`;
+  if (!rows.length) return head + '<p class="hint">Aucun classement pour l\'instant.</p>';
+  return head + '<table><thead><tr><th>Rang</th><th>Dossard</th><th>Nom complet</th><th>Établissement</th><th>Temps</th></tr></thead><tbody>' +
+    rows.map((r, i) => `<tr><td><b>${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
+}
+function renderClassements() {
+  const sel = document.getElementById('clas-vague'), cur = sel.value;
+  sel.innerHTML = DB.vagues.map(v => `<option value="${v.id}">${escapeHtml(v.nom)}</option>`).join('');
+  if (cur && DB.vagues.some(v => v.id === cur)) sel.value = cur;
+  if (!DB.vagues.length) { document.getElementById('clas-elite').innerHTML = document.getElementById('clas-spt').innerHTML = '<p class="hint">Définissez l\'année limite.</p>'; return; }
+  const v = DB.vagues.find(x => x.id === sel.value) || DB.vagues[0];
+  document.getElementById('clas-summary').textContent = v.depart ? `Départ réel : ${fmtClock(v.depart)}` : 'Course non partie.';
+  document.getElementById('clas-elite').innerHTML = tableClassement(v.id, true);
+  document.getElementById('clas-spt').innerHTML = tableClassement(v.id, false);
+}
+function exportClassementsCSV() {
+  const rows = [['Course','Sous-catégorie','Rang','Dossard','Code Massar','Nom complet','Établissement','Temps']];
+  DB.vagues.forEach(v => [true, false].forEach(el => classementDe(v.id, el).forEach((r, i) =>
+    rows.push([v.nom, el ? 'Elite' : 'Sport pour tous', i + 1, r.c.dossard, r.c.codeMassar, r.c.nomComplet, r.c.etablissement, fmtTime(r.temps)]))));
+  if (rows.length === 1) { showToast('Aucun résultat à exporter'); return; }
+  dl('\uFEFF' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\n'), (DB.course.nom || 'SmartCross') + '_Classements.csv', 'text/csv');
+}
+
+/* ===================== 13. INIT ===================== */
+function renderAll() { renderParametres(); renderCoureurs(); renderCourse(); renderClassements(); majIndicateurSauvegarde(); }
+// Certains navigateurs (Firefox) réinjectent les valeurs des champs après un rechargement : on les remet à zéro
+document.querySelectorAll('input, textarea').forEach(e => {
+  if (e.type === 'file' || e.type === 'button') return;
+  if (e.type === 'checkbox' || e.type === 'radio') e.checked = false; else e.value = '';
+});
+document.querySelectorAll('select').forEach(e => { e.selectedIndex = 0; });
+renderAll();
+</script>
+</body>
+</html>
