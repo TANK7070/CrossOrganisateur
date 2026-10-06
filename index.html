@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.013</title>
+<title>SmartCross - Organisateur v2.014</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -1054,7 +1054,7 @@ async function importerDepuisDrive() {
 
 async function publierConfigSurDrive() {
   if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
-  const cfg = { course: DB.course, anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
+  const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
     courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
   try {
     Progress.show('Publication…');
@@ -1192,7 +1192,7 @@ function renderParametres() {
 }
 function exportConfig() {
   if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
-  const cfg = { course: DB.course, anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
+  const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
     courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
   dl(JSON.stringify(cfg, null, 2), (DB.course.nom || 'SmartCross') + '_Config.json', 'application/json');
 }
