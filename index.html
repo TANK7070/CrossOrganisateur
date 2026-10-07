@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.017</title>
+<title>SmartCross - Organisateur v2.020</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -280,17 +280,14 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   <div class="card">
   <h2>Course</h2>
   <div class="row">
-    <div class="field"><label>Nom de la course</label><input id="input-course-nom" type="text" style="width:280px;" placeholder="Ex: Cross régional 2026"></div>
-    <div class="field"><label>Date</label><input id="input-course-date" type="date"></div>
+    <div class="field"><label>Nom de la course</label><input id="input-course-nom" type="text" onchange="saveCourseInfo()" style="width:280px;" placeholder="Ex: Cross régional 2026"></div>
+    <div class="field"><label>Date</label><input id="input-course-date" type="date" onchange="saveCourseInfo()"></div>
   </div>
   <div class="row">
-    <div class="field"><label>Ville</label><input id="input-course-ville" type="text" style="width:180px;" placeholder="Ex: الرباط / Rabat"></div>
-    <div class="field"><label>Titre arabe (en-tête du dossard)</label><input id="input-course-titre-ar" type="text" dir="rtl" style="width:380px;" placeholder="البطولة الإقليمية للعدو الريفي"></div>
+    <div class="field"><label>Ville</label><input id="input-course-ville" type="text" onchange="saveCourseInfo()" style="width:180px;" placeholder="Ex: الرباط / Rabat"></div>
+    <div class="field"><label>Titre arabe (en-tête du dossard)</label><input id="input-course-titre-ar" type="text" onchange="saveCourseInfo()" dir="rtl" style="width:380px;" placeholder="البطولة الإقليمية للعدو الريفي"></div>
   </div>
-  <div class="row">
-    <button onclick="saveCourseInfo()">Enregistrer</button>
-  </div>
-  <p class="hint">L'année scolaire (ex : 2025-2026) est calculée automatiquement à partir de la date : septembre→décembre = Y/Y+1, janvier→août = Y-1/Y.</p>
+  <p class="hint">L'année scolaire (ex : 2025-2026) est calculée automatiquement à partir de la date : septembre→décembre = Y/Y+1, janvier→août = Y-1/Y. Les modifications sont prises en compte immédiatement ; le bouton « 💾 Sauvegarder » (en haut) les envoie sur le Drive.</p>
 </div>
   <div class="card">
     <h2>Catégories d'âge et courses (vagues)</h2>
@@ -301,6 +298,18 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     </div>
     <div id="categories-list"></div>
     <div id="vagues-list"></div>
+  </div>
+  <div class="card">
+    <h2>Classement par équipes</h2>
+    <p class="hint">Le score d'une équipe = somme des places de ses <b>N premiers coureurs</b> à l'arrivée (le total le plus bas gagne). Une équipe qui a moins de N arrivants n'est pas classée.</p>
+    <div class="row">
+      <div class="field"><label>Nombre minimal N de coureurs requis pour le score d'équipe</label><input id="input-eq-nbmin" type="number" min="1" step="1" placeholder="Ex: 4" style="width:120px;" oninput="majLibellesDepartage()" onchange="saveEquipesParams()"></div>
+    </div>
+    <div class="field" style="margin-top:8px;">
+      <label>En cas d'égalité de points entre deux équipes, départager avec :</label>
+      <label style="display:block;font-weight:400;margin:4px 0;"><input type="radio" name="eq-departage" value="premier" onchange="saveEquipesParams()"> le <b>premier coureur</b> de l'équipe (le mieux placé l'emporte)</label>
+      <label style="display:block;font-weight:400;margin:4px 0;"><input type="radio" name="eq-departage" value="nieme" onchange="saveEquipesParams()"> le <b id="eq-lib-nieme">Nᵉ coureur</b> de l'équipe (le mieux placé l'emporte)</label>
+    </div>
   </div>
   <div class="card">
     <h2>Configuration pour les équipes</h2>
@@ -399,13 +408,6 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <div id="video-wrap"><video id="video" playsinline muted></video></div>
     <canvas id="scan-canvas" style="display:none;"></canvas>
     <div id="last-arrival">En attente de la première arrivée…</div>
-    <div id="arr-save-bar" style="display:none;margin:10px 0;padding:10px 14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;">
-      <div class="row" style="align-items:center;gap:10px;">
-        <button class="go" id="btn-arr-save" onclick="enregistrerMesArrivees()">💾 Enregistrer mes arrivées</button>
-        <span id="arr-save-status" class="hint"></span>
-      </div>
-      <div class="hint" style="margin-top:4px;">L'admin voit vos arrivées dès qu'elles sont enregistrées. Pensez à enregistrer régulièrement.</div>
-    </div>
     <h3>Arrivées enregistrées (<span id="arrivees-count">0</span>)</h3>
     <div class="scroll"><table>
       <thead><tr><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th><th>Saisie</th><th></th></tr></thead>
@@ -568,6 +570,7 @@ if (isDirty()) dirtySince = DB.majLe;
 function majIndicateurSauvegarde() {
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status'), bn = document.getElementById('save-banner');
   if (!btn) return;
+  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.020'; return; }
   const dirty = isDirty();
   btn.classList.toggle('dirty', dirty);
   const sy = getSync();
@@ -581,7 +584,7 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.017';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.020';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -598,7 +601,8 @@ async function trouverSauvegardeDrive() {
 }
 
 async function sauvegarderOrganisateur() {
-  if (monRole && monRole !== 'admin') { showToast('🔒 Seul l\'admin sauvegarde le fichier officiel. Juge d\'arrivée : utilisez « Enregistrer mes arrivées » dans l\'onglet Course.'); return; }
+  if (monRole === 'arrivee') return enregistrerMesArrivees();   // le juge sauvegarde ses arrivées pour l'admin
+  if (monRole && monRole !== 'admin') { showToast('🔒 Seuls l\'admin et le juge d\'arrivée peuvent sauvegarder.'); return; }
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status');
   btn.disabled = true; st.textContent = 'Sauvegarde en cours…'; st.style.color = '#555';
   try {
@@ -733,6 +737,7 @@ async function chargerConfigDrive() {
     if (!cfg || !cfg.anneeLimite) return;
     if (cfg.course) DB.course = cfg.course;
     DB.anneeLimite = cfg.anneeLimite;
+    if (cfg.classementEquipes && cfg.classementEquipes.nbMin) DB.equipes = { nbMin: cfg.classementEquipes.nbMin, departage: cfg.classementEquipes.departage === 'premier' ? 'premier' : 'nieme' };
     regenerateVagues();
     if (Array.isArray(cfg.courses)) cfg.courses.forEach(c => { const v = DB.vagues.find(x => x.id === c.id); if (v && c.heure) v.heure = c.heure; });
     saveDB(true); renderAll();
@@ -998,7 +1003,7 @@ function appliquerRole() {
   const cd = document.getElementById('card-departs'), ca = document.getElementById('card-arrivee');
   if (cd) cd.style.display = (r === 'arrivee') ? 'none' : '';
   if (ca) ca.style.display = (r === 'depart') ? 'none' : '';
-  const masquerSave = !!r && r !== 'admin';
+  const masquerSave = !!r && r !== 'admin' && r !== 'arrivee';
   document.getElementById('btn-save').style.display = masquerSave ? 'none' : '';
   document.getElementById('save-status').style.display = masquerSave ? 'none' : '';
   majBarreRole(); renderEquipe(); majIndicateurArrivees();
@@ -1016,35 +1021,34 @@ function majBarreRole() {
 // --- Juge d'arrivée : enregistrement de ses arrivées (fichier arrivees_<session>.json dans DriveCross) ---
 function marquerArrChange() { arrVer++; if (!arrDirtySince) arrDirtySince = Date.now(); majIndicateurArrivees(); }
 function majIndicateurArrivees() {
-  const bar = document.getElementById('arr-save-bar'); if (!bar) return;
-  bar.style.display = monRole === 'arrivee' ? '' : 'none';
   if (monRole !== 'arrivee') return;
-  const st = document.getElementById('arr-save-status'), btn = document.getElementById('btn-arr-save');
+  const st = document.getElementById('save-status'), btn = document.getElementById('btn-save'), info = document.getElementById('last-save-info');
+  if (!st || !btn) return;
   const n = DB.arrivees.filter(a => maSession && a.session === maSession.id).length;
   btn.classList.toggle('dirty', isDirty());
+  if (info) info.textContent = 'Vos arrivées sont envoyées à l\'admin';
   if (isDirty()) {
     const min = arrDirtySince ? Math.floor((Date.now() - arrDirtySince) / 60000) : 0;
-    st.textContent = `● ${n} arrivée(s) saisie(s), non enregistrée(s) pour l'admin` + (min >= 2 ? ` depuis ${min} min` : '');
+    st.textContent = `● ${n} arrivée(s) non sauvegardée(s)` + (min >= 2 ? ` depuis ${min} min` : '');
     st.style.color = min >= 2 ? '#c0392b' : '#b45309';
   } else if (arrDernierEnvoi) {
-    st.textContent = `✅ ${n} arrivée(s) enregistrée(s) à ${new Date(arrDernierEnvoi).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    st.textContent = `✅ ${n} arrivée(s) sauvegardée(s) à ${new Date(arrDernierEnvoi).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     st.style.color = '#1e8449';
-  } else { st.textContent = n ? '' : 'Aucune arrivée saisie pour le moment.'; st.style.color = '#666'; }
+  } else { st.textContent = ''; }
 }
-setInterval(majIndicateurArrivees, 30000);
 async function enregistrerMesArrivees() {
   if (monRole !== 'arrivee' || !maSession) return;
-  const btn = document.getElementById('btn-arr-save'), st = document.getElementById('arr-save-status');
-  btn.disabled = true; st.textContent = 'Enregistrement…'; st.style.color = '#555';
+  const btn = document.getElementById('btn-save'), st = document.getElementById('save-status');
+  btn.disabled = true; st.textContent = 'Sauvegarde en cours…'; st.style.color = '#555';
   try {
     await driveAuth();
     const v0 = arrVer, t = Date.now();
     const mes = DB.arrivees.filter(a => a.session === maSession.id).map(a => ({ codeMassar: a.codeMassar, ts: a.ts, source: a.source }));
     await ecrireFichier(ARR_PREFIX + maSession.id + '.json', { v: 1, sessionId: maSession.id, nom: maSession.nom, email: userEmail, majLe: t, arrivees: mes });
     arrEnvoyeVer = v0; arrDernierEnvoi = t; if (arrVer === arrEnvoyeVer) arrDirtySince = null;
-    majIndicateurArrivees(); showToast('💾 Arrivées enregistrées pour l\'admin');
+    majIndicateurArrivees(); showToast('💾 Sauvegardé : l\'admin peut voir vos arrivées');
   } catch (e) {
-    st.textContent = '❌ Échec de l\'enregistrement : ' + e.message; st.style.color = '#c0392b';
+    st.textContent = '❌ Échec de la sauvegarde'; st.style.color = '#c0392b';
     showToast('Échec : ' + e.message);
   } finally { btn.disabled = false; }
 }
@@ -1196,7 +1200,7 @@ async function importerDepuisDrive() {
 async function publierConfigSurDrive() {
   if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
   const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
-    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })), classementEquipes: eqParams() };
   try {
     Progress.show('Publication…');
     Progress.indeterminate('🔐 Authentification Google…');
@@ -1296,7 +1300,7 @@ function regenerateVagues() {
   computeCategories(DB.anneeLimite).forEach(c => ['G', 'F'].forEach(sx => {
     const id = `${c.id}_${sx}`;
     DB.vagues.push({ id, catId: c.id, sexe: sx, nom: `${c.nom} — ${sx === 'G' ? 'Garçons' : 'Filles'}`,
-      heure: old[id] ? old[id].heure : '', depart: old[id] ? old[id].depart : null });
+      heure: old[id] ? old[id].heure : '', depart: old[id] ? old[id].depart : null, fin: old[id] ? (old[id].fin || null) : null });
   }));
 }
 function saveAnneeLimite() {
@@ -1310,14 +1314,31 @@ function saveCourseInfo() {
   DB.course.date = document.getElementById('input-course-date').value;
   DB.course.ville = document.getElementById('input-course-ville').value.trim();
   DB.course.titreAr = document.getElementById('input-course-titre-ar').value.trim() || 'البطولة الإقليمية للعدو الريفي';
-  saveDB(); renderAll(); showToast('Informations enregistrées');
+  saveDB(); renderAll();
 }
 
+// Paramètres du classement par équipes (DB.equipes = { nbMin, departage : 'premier' | 'nieme' })
+function eqParams() { const e = DB.equipes || {}; return { nbMin: e.nbMin || null, departage: e.departage === 'premier' ? 'premier' : 'nieme' }; }
+function majLibellesDepartage() {
+  const n = parseInt(document.getElementById('input-eq-nbmin').value, 10);
+  document.getElementById('eq-lib-nieme').textContent = n >= 1 ? (n === 1 ? '1er coureur' : n + 'ᵉ coureur (dernier coureur compté)') : 'Nᵉ coureur (dernier coureur compté)';
+}
+function saveEquipesParams() {
+  const raw = document.getElementById('input-eq-nbmin').value.trim(), n = raw === '' ? null : Number(raw);
+  if (n !== null && !(Number.isInteger(n) && n >= 1)) { showToast('N doit être un entier supérieur ou égal à 1'); renderParametres(); return; }
+  const r = document.querySelector('input[name="eq-departage"]:checked');
+  DB.equipes = { nbMin: n, departage: r ? r.value : 'nieme' };
+  saveDB(); renderParametres();
+}
 function setHeureVague(id, val) { const v = DB.vagues.find(x => x.id === id); if (v) v.heure = val; saveDB(); }
 function renderParametres() {
   document.getElementById('input-course-nom').value = DB.course.nom || '';
   document.getElementById('input-course-date').value = DB.course.date || '';
   document.getElementById('input-annee-limite').value = DB.anneeLimite || '';
+  const ep = eqParams();
+  document.getElementById('input-eq-nbmin').value = ep.nbMin || '';
+  document.querySelectorAll('input[name="eq-departage"]').forEach(r => { r.checked = r.value === ep.departage; });
+  majLibellesDepartage();
   document.getElementById('course-name-display').textContent = DB.course.nom || '';
   document.getElementById('input-course-ville').value = DB.course.ville || '';
   document.getElementById('input-course-titre-ar').value = DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي';
@@ -1334,7 +1355,7 @@ function renderParametres() {
 function exportConfig() {
   if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
   const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
-    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })) };
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })), classementEquipes: eqParams() };
   dl(JSON.stringify(cfg, null, 2), (DB.course.nom || 'SmartCross') + '_Config.json', 'application/json');
 }
 function resetAll() {
@@ -1662,21 +1683,49 @@ async function generateDossardsPDF() {
 /* ===================== 10. COURSE : DEPARTS ===================== */
 function topDepart(id) {
   const v = DB.vagues.find(x => x.id === id); if (!v) return;
-  if (v.depart && !confirm('Cette course a déjà un top départ. Le remplacer ?')) return;
+  if (v.depart) { showToast('Cette course a déjà un top départ'); return; }
   v.depart = Date.now(); saveDB(); renderCourse(); showToast(`Top départ : ${v.nom}`);
 }
+function nbArriveesVague(id) { return coureursDeVague(id).filter(c => DB.arrivees.some(a => a.codeMassar === c.codeMassar)).length; }
+// Annulation = correction d'un top départ lancé par erreur : impossible dès qu'une arrivée est enregistrée
 function annulerDepart(id) {
-  const v = DB.vagues.find(x => x.id === id); if (!v || !confirm('Annuler le départ de cette course ?')) return;
+  const v = DB.vagues.find(x => x.id === id); if (!v || v.fin) return;
+  if (nbArriveesVague(id) > 0) { showToast('Impossible d\'annuler : des arrivées sont déjà enregistrées. Utilisez « Terminée ».'); return; }
+  if (!confirm('Annuler le top départ de cette course (lancé par erreur) ?')) return;
   v.depart = null; saveDB(); renderCourse();
 }
+// Fin de course : arrête le chrono, bloque les nouvelles arrivées, conserve toutes les données et lance la sauvegarde
+async function terminerCourse(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v || !v.depart || v.fin) return;
+  const arr = nbArriveesVague(id), ins = coureursDeVague(id).length;
+  if (!confirm(`Terminer « ${v.nom} » ?\n\n${arr} arrivé(s) sur ${ins} inscrit(s).\nLe chrono s'arrête et plus aucune arrivée ne pourra être enregistrée pour cette course (vous pourrez la rouvrir si besoin). Les résultats sont conservés.`)) return;
+  v.fin = Date.now(); saveDB(); renderAll();
+  showToast(`🏁 ${v.nom} : course terminée`);
+  if (driveToken && (!monRole || monRole === 'admin')) await sauvegarderOrganisateur();
+}
+function rouvrirCourse(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v || !v.fin) return;
+  if (!confirm('Rouvrir cette course ? Le chrono reprend et les arrivées peuvent de nouveau être enregistrées.')) return;
+  v.fin = null; saveDB(); renderAll();
+}
+function chronoHtml(v) {
+  if (!v.depart) return '—';
+  if (v.fin) return `<b>${fmtTime(v.fin - v.depart)}</b>`;
+  return `<span class="chrono" data-depart="${v.depart}">${fmtTime(Date.now() - v.depart)}</span>`;
+}
+function majChronos() { const now = Date.now(); document.querySelectorAll('.chrono[data-depart]').forEach(el => { el.textContent = fmtTime(now - Number(el.dataset.depart)); }); }
+setInterval(majChronos, 1000);
 function renderCourse() {
   document.getElementById('departs-list').innerHTML = DB.vagues.length
-    ? '<table><thead><tr><th>Course</th><th>Prévu</th><th>Inscrits</th><th>Arrivés</th><th>Départ réel</th><th></th></tr></thead><tbody>' +
+    ? '<table><thead><tr><th>Course</th><th>Prévu</th><th>Inscrits</th><th>Arrivés</th><th>Départ réel</th><th>Chrono</th><th>État</th><th></th></tr></thead><tbody>' +
       DB.vagues.map(v => {
-        const ins = coureursDeVague(v.id), arr = ins.filter(c => DB.arrivees.some(a => a.codeMassar === c.codeMassar)).length;
+        const ins = coureursDeVague(v.id), arr = nbArriveesVague(v.id);
+        const etat = !v.depart ? '<span class="badge">Non parti</span>' : v.fin ? `<span class="badge warn">🏁 Terminée à ${fmtClock(v.fin)}</span>` : '<span class="badge ok">En cours</span>';
+        const action = !v.depart ? `<button class="go" onclick="topDepart('${v.id}')">🚦 Top départ</button>`
+          : v.fin ? `<button class="secondary small" onclick="rouvrirCourse('${v.id}')">Rouvrir</button>`
+          : `<button onclick="terminerCourse('${v.id}')">🏁 Terminée</button>` + (arr === 0 ? ` <button class="secondary small" onclick="annulerDepart('${v.id}')" title="Top départ lancé par erreur">Annuler</button>` : '');
         return `<tr><td>${escapeHtml(v.nom)}</td><td>${v.heure || '—'}</td><td>${ins.length}</td><td>${arr}</td>
-          <td>${v.depart ? `<span class="badge ok">${fmtClock(v.depart)}</span>` : '<span class="badge">Non parti</span>'}</td>
-          <td>${v.depart ? `<button class="secondary small" onclick="annulerDepart('${v.id}')">Annuler</button>` : `<button class="go" onclick="topDepart('${v.id}')">🚦 Top départ</button>`}</td></tr>`;
+          <td>${v.depart ? `<span class="badge ok">${fmtClock(v.depart)}</span>` : '—'}</td><td>${chronoHtml(v)}</td><td>${etat}</td><td>${action}</td></tr>`;
       }).join('') + '</tbody></table>'
     : '<p class="hint">Définissez l\'année limite (Paramètres) pour générer les 8 courses.</p>';
   renderArrivees();
@@ -1738,6 +1787,7 @@ function enregistrerArrivee(code, source, ts) {
 
   const v = vagueOf(c);
   if (!v || !v.depart) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : course non partie`, false); beep(false); return; }
+  if (v.fin) { showFeedback(`⛔ #${c.dossard} ${escapeHtml(c.nomComplet)} : ${escapeHtml(v.nom)} est terminée, arrivée refusée`, false); beep(false); return; }
   if (DB.arrivees.some(a => a.codeMassar === c.codeMassar)) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : déjà enregistré`, false); beep(false); return; }
 
   DB.arrivees.push({ codeMassar: c.codeMassar, ts, source, session: maSession ? maSession.id : '' });
@@ -1803,7 +1853,7 @@ function renderClassements() {
   if (cur && DB.vagues.some(v => v.id === cur)) sel.value = cur;
   if (!DB.vagues.length) { document.getElementById('clas-podium').innerHTML = document.getElementById('clas-elite').innerHTML = document.getElementById('clas-spt').innerHTML = '<p class="hint">Définissez l\'année limite.</p>'; return; }
   const v = DB.vagues.find(x => x.id === sel.value) || DB.vagues[0];
-  document.getElementById('clas-summary').textContent = v.depart ? `Départ réel : ${fmtClock(v.depart)}` : 'Course non partie.';
+  document.getElementById('clas-summary').textContent = v.depart ? `Départ réel : ${fmtClock(v.depart)}` + (v.fin ? ` · 🏁 Terminée à ${fmtClock(v.fin)} (durée ${fmtTime(v.fin - v.depart)})` : ' · en cours') : 'Course non partie.';
   document.getElementById('clas-podium').innerHTML = tablePodium(v.id);
   document.getElementById('clas-elite').innerHTML = tableClassement(v.id, true);
   document.getElementById('clas-spt').innerHTML = tableClassement(v.id, false);
