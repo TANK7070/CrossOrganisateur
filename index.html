@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.014</title>
+<title>SmartCross - Organisateur v2.017</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -399,6 +399,13 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <div id="video-wrap"><video id="video" playsinline muted></video></div>
     <canvas id="scan-canvas" style="display:none;"></canvas>
     <div id="last-arrival">En attente de la première arrivée…</div>
+    <div id="arr-save-bar" style="display:none;margin:10px 0;padding:10px 14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;">
+      <div class="row" style="align-items:center;gap:10px;">
+        <button class="go" id="btn-arr-save" onclick="enregistrerMesArrivees()">💾 Enregistrer mes arrivées</button>
+        <span id="arr-save-status" class="hint"></span>
+      </div>
+      <div class="hint" style="margin-top:4px;">L'admin voit vos arrivées dès qu'elles sont enregistrées. Pensez à enregistrer régulièrement.</div>
+    </div>
     <h3>Arrivées enregistrées (<span id="arrivees-count">0</span>)</h3>
     <div class="scroll"><table>
       <thead><tr><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th><th>Saisie</th><th></th></tr></thead>
@@ -417,6 +424,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     </div>
     <div id="clas-summary" class="hint"></div>
   </div>
+  <div class="card"><h3>🏅 Podium <span class="hint" style="font-weight:400;">(4 premiers, toutes sous-catégories confondues)</span></h3><div id="clas-podium"></div></div>
   <div class="card"><h3>⭐ Élite</h3><div id="clas-elite"></div></div>
   <div class="card"><h3>Sport pour tous</h3><div id="clas-spt"></div></div>
 </section>
@@ -427,6 +435,11 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <h2>👥 Équipe</h2>
     <p class="hint">Les sessions connectées apparaissent ici. Attribuez à chacune un rôle : son interface s'adapte automatiquement en quelques secondes.</p>
     <div id="equipe-root"></div>
+  </div>
+  <div class="card" id="card-arr-recues">
+    <h3>📥 Arrivées reçues des juges</h3>
+    <p class="hint">Chaque juge d'arrivée enregistre ses arrivées dans son propre fichier. Vérifiez-les ici puis intégrez-les : elles rejoignent la liste des arrivées et les classements.</p>
+    <div id="equipe-arrivees"></div>
   </div>
 </section>
 
@@ -542,7 +555,13 @@ let dirtySince = null;
 function getSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || { local: 0, drive: 0 }; } catch (e) { return { local: 0, drive: 0 }; } }
 function setSync(o) { localStorage.setItem(SYNC_KEY, JSON.stringify(o)); }
 function localHasData() { return DB.coureurs.length || DB.arrivees.length || DB.vagues.some(v => v.depart); }
-function isDirty() { return (DB.majLe || 0) > (getSync().local || 0); }
+// Juge d'arrivée : ses modifications à enregistrer = arrivées saisies depuis le dernier envoi (arrVer > arrEnvoyeVer)
+let monRole = null;     // null = mode local (non connecté) ; sinon 'attente' | 'admin' | 'depart' | 'arrivee' | 'observateur'
+let arrVer = 0, arrEnvoyeVer = 0, arrDirtySince = null, arrDernierEnvoi = null;
+function isDirty() {
+  if (monRole && monRole !== 'admin') return monRole === 'arrivee' && arrVer > arrEnvoyeVer;
+  return (DB.majLe || 0) > (getSync().local || 0);
+}
 // Données déjà présentes sur l'appareil avant cette version : à considérer comme non sauvegardées
 if (!DB.majLe && localHasData()) DB.majLe = Date.now();
 if (isDirty()) dirtySince = DB.majLe;
@@ -562,7 +581,7 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.013';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.017';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -579,7 +598,7 @@ async function trouverSauvegardeDrive() {
 }
 
 async function sauvegarderOrganisateur() {
-  if (monRole && monRole !== 'admin') { showToast('🔒 Seul l\'admin sauvegarde le fichier officiel (le partage des données des autres rôles arrive à l\'étape 2).'); return; }
+  if (monRole && monRole !== 'admin') { showToast('🔒 Seul l\'admin sauvegarde le fichier officiel. Juge d\'arrivée : utilisez « Enregistrer mes arrivées » dans l\'onglet Course.'); return; }
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status');
   btn.disabled = true; st.textContent = 'Sauvegarde en cours…'; st.style.color = '#555';
   try {
@@ -762,6 +781,7 @@ async function driveUpsert(name, parent, content) {
    - affectations.json  : rôles attribués par l'admin (écrit par l'admin seul)
    - presence_<id>.json : une présence par session (écrite par la session seule)
    L'ancienneté d'un signal se mesure avec l'heure des serveurs Drive (pas l'horloge des téléphones). */
+const ARR_PREFIX = 'arrivees_';
 const ORG_FILE = 'organisation.json', AFFECT_FILE = 'affectations.json', BAIL_FILE = 'bail_admin.json', PRES_PREFIX = 'presence_';
 const EQUIPE_TICK_MS = 12000, EN_LIGNE_MS = 45000, BAIL_EXPIRE_MS = 60000, ANCIENNE_MS = 12 * 3600 * 1000;
 const ROLES = { depart: 'Départ', arrivee: 'Arrivée', observateur: 'Observateur' };
@@ -770,7 +790,6 @@ const ONGLETS_PAR_ROLE = {
   depart: ['course', 'classements'], arrivee: ['course', 'classements'], observateur: ['classements']
 };
 let maSession = null;   // { id, nom, premiere } : propre à cet onglet (sessionStorage), pas à l'appareil ni au compte Google
-let monRole = null;     // null = mode local (non connecté) ; sinon 'attente' | 'admin' | 'depart' | 'arrivee' | 'observateur'
 let decalageServeur = 0, equipeTimer = null, equipeBusy = false;
 let equipeEtat = { presences: [], affectations: {}, bail: null, anciennes: false };
 const idCache = {}, cacheContenu = {};
@@ -868,6 +887,7 @@ async function entrerDansEquipe() {
     if (bailActif(bail) && bail.data.sessionId === maSession.id) monRole = 'admin';   // reprise après actualisation de la page
     else if (equipeEtat.affectations[maSession.id]) monRole = equipeEtat.affectations[maSession.id];
     appliquerRole();
+    if (monRole === 'arrivee') await restaurerMesArrivees();
     if (monRole === 'attente') ouvrirGate('attente');
     demarrerEquipe();
   } catch (e) { showToast('⚠️ Équipe : ' + e.message); }
@@ -936,7 +956,7 @@ async function tickEquipe() {
       if (r !== monRole) {
         monRole = r; appliquerRole();
         if (r === 'attente') { ouvrirGate('attente'); showToast('Votre rôle a été retiré : en attente d\'affectation'); }
-        else { fermerGate(); showToast('🎭 Nouveau rôle : ' + ROLES[r]); }
+        else { fermerGate(); showToast('🎭 Nouveau rôle : ' + ROLES[r]); if (r === 'arrivee') await restaurerMesArrivees(); }
       }
     }
     majBarreRole();
@@ -944,11 +964,24 @@ async function tickEquipe() {
   finally { equipeBusy = false; }
 }
 async function rafraichirPresences() {
-  const liste = (await listerFichiers("mimeType='application/json'", 200)).filter(f => f.name.startsWith(PRES_PREFIX));
+  const liste0 = await listerFichiers("mimeType='application/json'", 200);
+  const liste = liste0.filter(f => f.name.startsWith(PRES_PREFIX));
   const res = await Promise.all(liste.map(async f => {
     try { const d = await lireFichier(f.id); return { ...d, age: ageMs(f.modifiedTime) }; } catch (e) { return null; }
   }));
   equipeEtat.presences = res.filter(Boolean);
+  // arrivées envoyées par les juges (un fichier par session ; le plus récent si doublon de nom)
+  const vus = new Set(), fa = liste0.filter(f => f.name.startsWith(ARR_PREFIX));
+  const ar = await Promise.all(fa.map(async f => {
+    try {
+      const c = cacheContenu[f.id]; let d;
+      if (c && c.mt === f.modifiedTime) d = c.data; else { d = await lireFichier(f.id); cacheContenu[f.id] = { mt: f.modifiedTime, data: d }; }
+      return d && d.sessionId && Array.isArray(d.arrivees) ? d : null;
+    } catch (e) { return null; }
+  }));
+  const anciens = equipeEtat.arrivees ? Object.fromEntries(equipeEtat.arrivees.map(x => [x.sessionId, x.majLe])) : null;
+  equipeEtat.arrivees = ar.filter(d => d && !vus.has(d.sessionId) && vus.add(d.sessionId));
+  if (anciens) equipeEtat.arrivees.forEach(d => { if (d.majLe !== anciens[d.sessionId]) showToast(`📥 Arrivées reçues de ${d.nom || 'un juge'} (${d.arrivees.length})`); });
   renderEquipe();
 }
 
@@ -968,7 +1001,7 @@ function appliquerRole() {
   const masquerSave = !!r && r !== 'admin';
   document.getElementById('btn-save').style.display = masquerSave ? 'none' : '';
   document.getElementById('save-status').style.display = masquerSave ? 'none' : '';
-  majBarreRole(); renderEquipe();
+  majBarreRole(); renderEquipe(); majIndicateurArrivees();
 }
 function majBarreRole() {
   const bar = document.getElementById('role-bar');
@@ -980,9 +1013,117 @@ function majBarreRole() {
   bar.style.display = 'block';
 }
 
+// --- Juge d'arrivée : enregistrement de ses arrivées (fichier arrivees_<session>.json dans DriveCross) ---
+function marquerArrChange() { arrVer++; if (!arrDirtySince) arrDirtySince = Date.now(); majIndicateurArrivees(); }
+function majIndicateurArrivees() {
+  const bar = document.getElementById('arr-save-bar'); if (!bar) return;
+  bar.style.display = monRole === 'arrivee' ? '' : 'none';
+  if (monRole !== 'arrivee') return;
+  const st = document.getElementById('arr-save-status'), btn = document.getElementById('btn-arr-save');
+  const n = DB.arrivees.filter(a => maSession && a.session === maSession.id).length;
+  btn.classList.toggle('dirty', isDirty());
+  if (isDirty()) {
+    const min = arrDirtySince ? Math.floor((Date.now() - arrDirtySince) / 60000) : 0;
+    st.textContent = `● ${n} arrivée(s) saisie(s), non enregistrée(s) pour l'admin` + (min >= 2 ? ` depuis ${min} min` : '');
+    st.style.color = min >= 2 ? '#c0392b' : '#b45309';
+  } else if (arrDernierEnvoi) {
+    st.textContent = `✅ ${n} arrivée(s) enregistrée(s) à ${new Date(arrDernierEnvoi).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    st.style.color = '#1e8449';
+  } else { st.textContent = n ? '' : 'Aucune arrivée saisie pour le moment.'; st.style.color = '#666'; }
+}
+setInterval(majIndicateurArrivees, 30000);
+async function enregistrerMesArrivees() {
+  if (monRole !== 'arrivee' || !maSession) return;
+  const btn = document.getElementById('btn-arr-save'), st = document.getElementById('arr-save-status');
+  btn.disabled = true; st.textContent = 'Enregistrement…'; st.style.color = '#555';
+  try {
+    await driveAuth();
+    const v0 = arrVer, t = Date.now();
+    const mes = DB.arrivees.filter(a => a.session === maSession.id).map(a => ({ codeMassar: a.codeMassar, ts: a.ts, source: a.source }));
+    await ecrireFichier(ARR_PREFIX + maSession.id + '.json', { v: 1, sessionId: maSession.id, nom: maSession.nom, email: userEmail, majLe: t, arrivees: mes });
+    arrEnvoyeVer = v0; arrDernierEnvoi = t; if (arrVer === arrEnvoyeVer) arrDirtySince = null;
+    majIndicateurArrivees(); showToast('💾 Arrivées enregistrées pour l\'admin');
+  } catch (e) {
+    st.textContent = '❌ Échec de l\'enregistrement : ' + e.message; st.style.color = '#c0392b';
+    showToast('Échec : ' + e.message);
+  } finally { btn.disabled = false; }
+}
+// Après une actualisation de la page (données locales vidées) : on récupère les arrivées déjà enregistrées par cette session
+async function restaurerMesArrivees() {
+  try {
+    const f = await lireNomme(ARR_PREFIX + maSession.id + '.json');
+    if (!f || !f.data || !Array.isArray(f.data.arrivees)) { majIndicateurArrivees(); return; }
+    let n = 0;
+    f.data.arrivees.forEach(a => {
+      if (a && a.codeMassar && !DB.arrivees.some(x => x.codeMassar === a.codeMassar)) { DB.arrivees.push({ codeMassar: a.codeMassar, ts: a.ts, source: a.source, session: maSession.id }); n++; }
+    });
+    arrEnvoyeVer = arrVer; arrDernierEnvoi = f.data.majLe || null; arrDirtySince = null;
+    if (n) { saveDB(true); renderAll(); showToast(`↩️ ${n} arrivée(s) de votre session récupérée(s)`); }
+    majIndicateurArrivees();
+  } catch (e) { /* lecture impossible : on continue sans */ }
+}
+
+// --- Admin : arrivées reçues des juges ---
+function diffArrivees(s) {
+  const dans = new Set(s.arrivees.map(a => a.codeMassar));
+  return {
+    ajouter: s.arrivees.filter(a => !DB.arrivees.some(x => x.codeMassar === a.codeMassar)),
+    retirer: DB.arrivees.filter(x => x.session === s.sessionId && !dans.has(x.codeMassar)),
+    doublons: s.arrivees.filter(a => DB.arrivees.some(x => x.codeMassar === a.codeMassar && x.session !== s.sessionId))
+  };
+}
+function integrerArrivees(sessionId) {
+  const s = (equipeEtat.arrivees || []).find(x => x.sessionId === sessionId); if (!s) return;
+  const d = diffArrivees(s);
+  if (!d.ajouter.length && !d.retirer.length) { showToast('Déjà à jour'); return; }
+  const txt = `Intégrer les arrivées de ${s.nom || 'ce juge'} ?\n\n+ ${d.ajouter.length} arrivée(s) ajoutée(s)\n− ${d.retirer.length} arrivée(s) retirée(s) (supprimées par le juge)` +
+    (d.doublons.length ? `\n${d.doublons.length} déjà enregistrée(s) autrement (conservées telles quelles)` : '');
+  if (!confirm(txt)) return;
+  d.ajouter.forEach(a => DB.arrivees.push({ codeMassar: a.codeMassar, ts: a.ts, source: a.source, session: s.sessionId }));
+  DB.arrivees = DB.arrivees.filter(x => !d.retirer.includes(x));
+  saveDB(); renderAll(); renderArriveesRecues();
+  showToast(`✅ Arrivées de ${s.nom || 'ce juge'} intégrées — pensez à sauvegarder`);
+}
+function integrerToutesArrivees() {
+  const liste = (equipeEtat.arrivees || []).filter(s => { const d = diffArrivees(s); return d.ajouter.length || d.retirer.length; });
+  if (!liste.length) { showToast('Tout est déjà à jour'); return; }
+  if (!confirm(`Intégrer les arrivées de ${liste.length} juge(s) ?`)) return;
+  liste.forEach(s => { const d = diffArrivees(s);
+    d.ajouter.forEach(a => DB.arrivees.push({ codeMassar: a.codeMassar, ts: a.ts, source: a.source, session: s.sessionId }));
+    DB.arrivees = DB.arrivees.filter(x => !d.retirer.includes(x)); });
+  saveDB(); renderAll(); renderArriveesRecues();
+  showToast('✅ Arrivées intégrées — pensez à sauvegarder');
+}
+function renderArriveesRecues() {
+  const el = document.getElementById('equipe-arrivees'), tab = document.querySelector('nav .tab[data-tab="equipe"]'); if (!el) return;
+  if (monRole !== 'admin') { el.innerHTML = ''; return; }
+  const liste = (equipeEtat.arrivees || []).slice().sort((a, b) => (b.majLe || 0) - (a.majLe || 0));
+  const aIntegrer = liste.filter(s => { const d = diffArrivees(s); return d.ajouter.length || d.retirer.length; }).length;
+  if (tab) tab.textContent = '👥 Équipe' + (aIntegrer ? ` (${aIntegrer} 📥)` : '');
+  if (!liste.length) { el.innerHTML = '<p class="hint">Aucune arrivée reçue pour le moment.</p>'; return; }
+  const ouverts = equipeEtat.arrOuverts || (equipeEtat.arrOuverts = {});
+  let h = aIntegrer > 1 ? '<p><button class="go" onclick="integrerToutesArrivees()">📥 Tout intégrer</button></p>' : '';
+  h += '<div class="scroll"><table><thead><tr><th>Juge</th><th>Arrivées</th><th>Reçues à</th><th>État</th><th></th></tr></thead><tbody>';
+  liste.forEach(s => {
+    const d = diffArrivees(s), ok = !d.ajouter.length && !d.retirer.length;
+    const etat = ok ? '<span class="badge ok">✔ intégrées</span>' : `<span class="badge warn">${d.ajouter.length ? '+' + d.ajouter.length : ''}${d.ajouter.length && d.retirer.length ? ' / ' : ''}${d.retirer.length ? '−' + d.retirer.length : ''} à intégrer</span>`;
+    const lignes = s.arrivees.slice().sort((a, b) => a.ts - b.ts).map((a, i) => {
+      const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null;
+      return `<tr><td>${i + 1}</td><td>${fmtClock(a.ts)}</td><td>${c ? '#' + c.dossard : '?'}</td><td dir="auto">${c ? escapeHtml(c.nomComplet) : escapeHtml(a.codeMassar)}</td><td>${v ? escapeHtml(v.nom) : '—'}</td><td>${v && v.depart ? fmtTime(a.ts - v.depart) : '—'}</td></tr>`;
+    }).join('');
+    h += `<tr><td>${escapeHtml(s.nom || '?')}<div class="hint">${escapeHtml(s.email || '')}</div></td><td><b>${s.arrivees.length}</b></td>
+      <td>${s.majLe ? new Date(s.majLe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</td><td>${etat}</td>
+      <td>${ok ? '' : `<button class="go small" onclick="integrerArrivees('${s.sessionId}')">Intégrer</button>`}</td></tr>
+      <tr><td colspan="5" style="padding:0 8px 8px;"><details ${ouverts[s.sessionId] ? 'open' : ''} ontoggle="equipeEtat.arrOuverts['${s.sessionId}']=this.open"><summary class="hint" style="cursor:pointer;">Voir le détail (${s.arrivees.length})</summary>
+      ${lignes ? `<div class="scroll"><table><thead><tr><th>#</th><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th></tr></thead><tbody>${lignes}</tbody></table></div>` : '<p class="hint">Aucune arrivée.</p>'}</details></td></tr>`;
+  });
+  el.innerHTML = h + '</tbody></table></div>';
+}
+
 // --- Onglet Équipe (admin) ---
 function renderEquipe() {
   const el = document.getElementById('equipe-root'); if (!el) return;
+  renderArriveesRecues();
   if (monRole !== 'admin') { el.innerHTML = ''; return; }
   const aff = equipeEtat.affectations;
   const lignes = equipeEtat.presences
@@ -1245,7 +1386,7 @@ function toggleEliteCoureur(code, v) { const c = findByCode(code); if (c) c.elit
 function estFichierSysteme(nom) {
   const n = String(nom || '').toLowerCase();
   return n === 'config.json' || n === 'sauvegardeorganisateur.json' || n === 'bail_admin.json'
-    || n === 'organisation.json' || n === 'affectations.json' || n.startsWith('presence_');
+    || n === 'organisation.json' || n === 'affectations.json' || n.startsWith('presence_') || n.startsWith('arrivees_');
 }
 // Un JSON d'inscription d'équipe = objet avec une liste "participants" dont les entrées portent un codeMassar
 function estJsonEquipe(data) {
@@ -1599,7 +1740,8 @@ function enregistrerArrivee(code, source, ts) {
   if (!v || !v.depart) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : course non partie`, false); beep(false); return; }
   if (DB.arrivees.some(a => a.codeMassar === c.codeMassar)) { showFeedback(`⚠️ #${c.dossard} ${escapeHtml(c.nomComplet)} : déjà enregistré`, false); beep(false); return; }
 
-  DB.arrivees.push({ codeMassar: c.codeMassar, ts, source });
+  DB.arrivees.push({ codeMassar: c.codeMassar, ts, source, session: maSession ? maSession.id : '' });
+  if (monRole === 'arrivee') marquerArrChange();
   saveDB(); beep(true);
 
   const rang = classementDe(v.id, !!c.elite).findIndex(r => r.c.codeMassar === c.codeMassar) + 1;
@@ -1608,16 +1750,20 @@ function enregistrerArrivee(code, source, ts) {
 }
 
 function supprimerArrivee(code) {
+  const a0 = DB.arrivees.find(a => a.codeMassar === code);
+  if (monRole === 'arrivee' && a0 && a0.session !== (maSession && maSession.id)) { showToast('Cette arrivée ne vient pas de votre session : seul l\'admin peut la retirer.'); return; }
   if (!confirm('Supprimer cette arrivée ?')) return;
-  DB.arrivees = DB.arrivees.filter(a => a.codeMassar !== code); saveDB(); renderCourse();
+  DB.arrivees = DB.arrivees.filter(a => a.codeMassar !== code);
+  if (monRole === 'arrivee') marquerArrChange();
+  saveDB(); renderCourse();
 }
 function renderArrivees() {
   document.getElementById('arrivees-count').textContent = DB.arrivees.length;
-  document.getElementById('arrivees-tbody').innerHTML = DB.arrivees.slice().sort((a, b) => b.ts - a.ts).map(a => {
+  document.getElementById('arrivees-tbody').innerHTML = DB.arrivees.slice().sort((a, b) => a.ts - b.ts).map(a => {
     const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null;
     return `<tr><td>${fmtClock(a.ts)}</td><td>${c ? '#' + c.dossard : '?'}</td><td dir="auto">${c ? escapeHtml(c.nomComplet) : escapeHtml(a.codeMassar)}</td>
       <td>${v ? escapeHtml(v.nom) : '—'}</td><td>${v && v.depart ? fmtTime(a.ts - v.depart) : '—'}</td><td>${a.source}</td>
-      <td><button class="danger small" onclick="supprimerArrivee('${a.codeMassar}')">✕</button></td></tr>`;
+      <td>${(monRole === 'arrivee' && a.session !== (maSession && maSession.id)) ? '' : `<button class="danger small" onclick="supprimerArrivee('${a.codeMassar}')">✕</button>`}</td></tr>`;
   }).join('');
 }
 
@@ -1636,13 +1782,29 @@ function tableClassement(vagueId, elite) {
   return head + '<table><thead><tr><th>Rang</th><th>Dossard</th><th>Nom complet</th><th>Établissement</th><th>Temps</th></tr></thead><tbody>' +
     rows.map((r, i) => `<tr><td><b>${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
 }
+function podiumDe(vagueId) {
+  const v = DB.vagues.find(x => x.id === vagueId); if (!v || !v.depart) return [];
+  return coureursDeVague(vagueId)
+    .map(c => ({ c, a: DB.arrivees.find(x => x.codeMassar === c.codeMassar) })).filter(r => r.a)
+    .sort((x, y) => x.a.ts - y.a.ts).map(r => ({ c: r.c, ts: r.a.ts, temps: r.a.ts - v.depart }));
+}
+function tablePodium(vagueId) {
+  const all = podiumDe(vagueId), rows = all.slice(0, 4);
+  const total = coureursDeVague(vagueId).length;
+  const head = `<p class="hint">${all.length} arrivé(s) sur ${total} inscrit(s)</p>`;
+  if (!rows.length) return head + '<p class="hint">Aucun classement pour l\'instant.</p>';
+  const medal = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+  return head + '<table><thead><tr><th>Rang</th><th>Dossard</th><th>Nom complet</th><th>Sous-catégorie</th><th>Établissement</th><th>Temps</th></tr></thead><tbody>' +
+    rows.map((r, i) => `<tr><td><b>${medal(i)} ${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td>${r.c.elite ? '<span class="badge elite">⭐ Élite</span>' : '<span class="badge">Sport pour tous</span>'}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
+}
 function renderClassements() {
   const sel = document.getElementById('clas-vague'), cur = sel.value;
   sel.innerHTML = DB.vagues.map(v => `<option value="${v.id}">${escapeHtml(v.nom)}</option>`).join('');
   if (cur && DB.vagues.some(v => v.id === cur)) sel.value = cur;
-  if (!DB.vagues.length) { document.getElementById('clas-elite').innerHTML = document.getElementById('clas-spt').innerHTML = '<p class="hint">Définissez l\'année limite.</p>'; return; }
+  if (!DB.vagues.length) { document.getElementById('clas-podium').innerHTML = document.getElementById('clas-elite').innerHTML = document.getElementById('clas-spt').innerHTML = '<p class="hint">Définissez l\'année limite.</p>'; return; }
   const v = DB.vagues.find(x => x.id === sel.value) || DB.vagues[0];
   document.getElementById('clas-summary').textContent = v.depart ? `Départ réel : ${fmtClock(v.depart)}` : 'Course non partie.';
+  document.getElementById('clas-podium').innerHTML = tablePodium(v.id);
   document.getElementById('clas-elite').innerHTML = tableClassement(v.id, true);
   document.getElementById('clas-spt').innerHTML = tableClassement(v.id, false);
 }
