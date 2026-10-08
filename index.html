@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.020</title>
+<title>SmartCross - Organisateur v2.025</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -241,6 +244,71 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   text-align: center;
 }
 
+/* ===== Rapport technique (A4 portrait) ===== */
+#pdf-stage { position:absolute; left:-12000px; top:0; }
+
+.report-page {
+  width: 794px; height: 1123px; background:#fff;
+  padding: 16px 22px 14px; box-sizing:border-box;
+  font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+  color:#111827; direction:rtl; line-height:1.35;
+  display:flex; flex-direction:column;
+}
+/* IMPORTANT : html2canvas dessine le texte lettre par lettre dès qu'un letter-spacing est défini,
+   ce qui déconnecte les lettres arabes. On l'interdit donc dans tout le rapport. */
+.report-page, .report-page * { letter-spacing: 0 !important; }
+
+.rep-header { position:relative; text-align:center; margin-bottom:6px; }
+.rep-logo-aref { position:absolute; top:0; right:0; max-height:64px; max-width:105px; object-fit:contain; }
+.rep-logo-min  { max-height:60px; max-width:160px; object-fit:contain; display:block; margin:0 auto 4px; }
+.rep-titre-ar  { font-size:21px; font-weight:800; color:#111827; }
+.rep-subline   { display:flex; justify-content:space-between; align-items:center; font-size:14px; color:#374151; padding:0 8px; margin-top:4px; }
+.rep-subline .rep-locale b { color:#065f46; }
+
+.rep-main-title {
+  text-align:center; font-size:20px; font-weight:800;
+  margin:10px 0 8px; border-bottom:2px solid #111827; padding-bottom:4px;
+}
+
+/* Bandeau : numéro, heure, distance, catégorie */
+.rep-bandeau { width:100%; border-collapse:collapse; table-layout:fixed; margin-bottom:8px; }
+.rep-bandeau th, .rep-bandeau td {
+  border:1px solid #374151; padding:4px 8px; text-align:center; font-size:13px;
+  overflow:hidden; white-space:nowrap;
+}
+.rep-bandeau th { background:#f3f4f6; font-weight:700; }
+.rep-bandeau td { font-weight:600; }
+.rep-bandeau .cat-cell { font-weight:700; }
+
+/* Titres de section */
+.rep-section-title {
+  text-align:center; font-size:15px; font-weight:700;
+  background:#f3f4f6; border:1px solid #374151; border-bottom:none;
+  padding:3px 0; margin-top:6px;
+}
+
+/* Tableaux : largeurs fixes (colgroup) + texte réduit automatiquement si trop long */
+.rep-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.rep-table th, .rep-table td {
+  border:1px solid #374151; padding:2px 6px; font-size:13px;
+  text-align:right; vertical-align:middle; line-height:1.2;
+  overflow:hidden; white-space:nowrap;
+}
+.rep-table th { background:#f9fafb; font-weight:700; text-align:center; }
+.rep-table td.center { text-align:center; }
+.rep-table td.num { text-align:center; font-weight:600; }
+.rep-indiv tr { height:26px; }
+.rep-eq tr    { height:30px; }
+
+.rep-signature {
+  margin-top:auto; padding-top:18px;
+  text-align:center; font-size:14px; font-weight:600; color:#374151;
+}
+.rep-signature .rep-sig-line {
+  display:inline-block; border-top:1px solid #374151;
+  padding-top:4px; min-width:200px; margin-top:36px;
+}
+
 </style>
 </head>
 <body>
@@ -285,6 +353,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   </div>
   <div class="row">
     <div class="field"><label>Ville</label><input id="input-course-ville" type="text" onchange="saveCourseInfo()" style="width:180px;" placeholder="Ex: الرباط / Rabat"></div>
+    <div class="field"><label>Locale</label><input id="input-course-locale" type="text" onchange="saveCourseInfo()" style="width:180px;" placeholder="Ex: المركز الجهوي / CEI"></div>
     <div class="field"><label>Titre arabe (en-tête du dossard)</label><input id="input-course-titre-ar" type="text" onchange="saveCourseInfo()" dir="rtl" style="width:380px;" placeholder="البطولة الإقليمية للعدو الريفي"></div>
   </div>
   <p class="hint">L'année scolaire (ex : 2025-2026) est calculée automatiquement à partir de la date : septembre→décembre = Y/Y+1, janvier→août = Y-1/Y. Les modifications sont prises en compte immédiatement ; le bouton « 💾 Sauvegarder » (en haut) les envoie sur le Drive.</p>
@@ -397,6 +466,14 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <p class="hint">Un top départ par course (vague). Le temps de chaque coureur = heure d'arrivée − heure du top de sa vague.</p>
     <div id="departs-list"></div>
   </div>
+  <div class="card">
+  <h2>Rapport technique</h2>
+  <div class="row">
+    <div class="field"><label>Course (vague)</label><select id="rapport-vague"></select></div>
+    <button class="go" onclick="generateRapportTechniquePDF()">📊 Générer le rapport technique (PDF)</button>
+  </div>
+  <p class="hint">Le rapport ne contient que la course choisie : 2 pages (Élite, puis Sport pour tous).</p>
+</div>
   <div class="card" id="card-arrivee">
     <h2>Ligne d'arrivée</h2>
     <div class="row">
@@ -534,7 +611,7 @@ let quitterSansAlerte = false; // vrai pendant une déconnexion volontaire (pas 
 function loadDB() {
   try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch (e) { console.error(e); }
     return {
-    course: { nom: '', date: '', ville: '', titreAr: 'البطولة الإقليمية للعدو الريفي' },
+    course: { nom: '', date: '', ville: '', locale: '', titreAr: 'البطولة الإقليمية للعدو الريفي' },
     anneeLimite: null,
     vagues: [],
     coureurs: [],
@@ -570,7 +647,7 @@ if (isDirty()) dirtySince = DB.majLe;
 function majIndicateurSauvegarde() {
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status'), bn = document.getElementById('save-banner');
   if (!btn) return;
-  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.020'; return; }
+  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.025'; return; }
   const dirty = isDirty();
   btn.classList.toggle('dirty', dirty);
   const sy = getSync();
@@ -584,7 +661,7 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.020';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.025';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -739,7 +816,10 @@ async function chargerConfigDrive() {
     DB.anneeLimite = cfg.anneeLimite;
     if (cfg.classementEquipes && cfg.classementEquipes.nbMin) DB.equipes = { nbMin: cfg.classementEquipes.nbMin, departage: cfg.classementEquipes.departage === 'premier' ? 'premier' : 'nieme' };
     regenerateVagues();
-    if (Array.isArray(cfg.courses)) cfg.courses.forEach(c => { const v = DB.vagues.find(x => x.id === c.id); if (v && c.heure) v.heure = c.heure; });
+    if (Array.isArray(cfg.courses)) cfg.courses.forEach(c => {
+      const v = DB.vagues.find(x => x.id === c.id);
+      if (v) { if (c.heure) v.heure = c.heure; if (c.distance) v.distance = c.distance; }
+    });
     saveDB(true); renderAll();
     driveStatus('config-drive-status', `✅ Configuration synchronisée depuis le Drive (année limite ${cfg.anneeLimite}).`, true);
   } catch (e) { driveStatus('config-drive-status', '⚠️ Lecture de la configuration impossible : ' + e.message, false); }
@@ -981,7 +1061,8 @@ async function rafraichirPresences() {
     try {
       const c = cacheContenu[f.id]; let d;
       if (c && c.mt === f.modifiedTime) d = c.data; else { d = await lireFichier(f.id); cacheContenu[f.id] = { mt: f.modifiedTime, data: d }; }
-      return d && d.sessionId && Array.isArray(d.arrivees) ? d : null;
+      if (d && d.sessionId && Array.isArray(d.arrivees)) { d.fichierId = f.id; return d; }
+      return null;
     } catch (e) { return null; }
   }));
   const anciens = equipeEtat.arrivees ? Object.fromEntries(equipeEtat.arrivees.map(x => [x.sessionId, x.majLe])) : null;
@@ -1068,6 +1149,23 @@ async function restaurerMesArrivees() {
 }
 
 // --- Admin : arrivées reçues des juges ---
+// Une liste rejetée (DB.arrRejetees[sessionId] = majLe rejeté) reste masquée tant que le juge n'envoie pas une nouvelle version
+function arriveesRecues() { const rej = DB.arrRejetees || {}; return (equipeEtat.arrivees || []).filter(s => !((rej[s.sessionId] || 0) >= (s.majLe || 0) && rej[s.sessionId] !== undefined)); }
+async function supprimerListeArrivees(sessionId) {
+  const s = arriveesRecues().find(x => x.sessionId === sessionId); if (!s) return;
+  const nom = s.nom || 'ce juge';
+  if (!confirm(`Supprimer la liste reçue de ${nom} (${s.arrivees.length} arrivée(s)) ?\n\nElle sera retirée de cette vue et ne sera pas intégrée. Si ${nom} renvoie une nouvelle liste, elle réapparaîtra.`)) return;
+  const deja = DB.arrivees.filter(x => x.session === sessionId).length;
+  const retirer = deja > 0 && confirm(`${deja} arrivée(s) de ${nom} ont déjà été intégrées aux classements.\n\nOK = les retirer aussi des classements\nAnnuler = les conserver`);
+  DB.arrRejetees = Object.assign({}, DB.arrRejetees, { [sessionId]: s.majLe || 0 });
+  if (retirer) DB.arrivees = DB.arrivees.filter(x => x.session !== sessionId);
+  saveDB(); renderAll(); renderArriveesRecues();
+  showToast(`🗑 Liste de ${nom} supprimée` + (retirer ? ` (${deja} arrivée(s) retirée(s) des classements)` : ''));
+  // suppression du fichier sur le Drive (si les droits le permettent ; sinon la liste reste simplement masquée)
+  if (s.fichierId && driveToken) {
+    try { const r = await fetch(`https://www.googleapis.com/drive/v3/files/${s.fichierId}?supportsAllDrives=true`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + driveToken } }); if (r.ok) delete cacheContenu[s.fichierId]; } catch (e) { /* masquée quand même */ }
+  }
+}
 function diffArrivees(s) {
   const dans = new Set(s.arrivees.map(a => a.codeMassar));
   return {
@@ -1077,7 +1175,7 @@ function diffArrivees(s) {
   };
 }
 function integrerArrivees(sessionId) {
-  const s = (equipeEtat.arrivees || []).find(x => x.sessionId === sessionId); if (!s) return;
+  const s = arriveesRecues().find(x => x.sessionId === sessionId); if (!s) return;
   const d = diffArrivees(s);
   if (!d.ajouter.length && !d.retirer.length) { showToast('Déjà à jour'); return; }
   const txt = `Intégrer les arrivées de ${s.nom || 'ce juge'} ?\n\n+ ${d.ajouter.length} arrivée(s) ajoutée(s)\n− ${d.retirer.length} arrivée(s) retirée(s) (supprimées par le juge)` +
@@ -1089,7 +1187,7 @@ function integrerArrivees(sessionId) {
   showToast(`✅ Arrivées de ${s.nom || 'ce juge'} intégrées — pensez à sauvegarder`);
 }
 function integrerToutesArrivees() {
-  const liste = (equipeEtat.arrivees || []).filter(s => { const d = diffArrivees(s); return d.ajouter.length || d.retirer.length; });
+  const liste = arriveesRecues().filter(s => { const d = diffArrivees(s); return d.ajouter.length || d.retirer.length; });
   if (!liste.length) { showToast('Tout est déjà à jour'); return; }
   if (!confirm(`Intégrer les arrivées de ${liste.length} juge(s) ?`)) return;
   liste.forEach(s => { const d = diffArrivees(s);
@@ -1101,7 +1199,7 @@ function integrerToutesArrivees() {
 function renderArriveesRecues() {
   const el = document.getElementById('equipe-arrivees'), tab = document.querySelector('nav .tab[data-tab="equipe"]'); if (!el) return;
   if (monRole !== 'admin') { el.innerHTML = ''; return; }
-  const liste = (equipeEtat.arrivees || []).slice().sort((a, b) => (b.majLe || 0) - (a.majLe || 0));
+  const liste = arriveesRecues().slice().sort((a, b) => (b.majLe || 0) - (a.majLe || 0));
   const aIntegrer = liste.filter(s => { const d = diffArrivees(s); return d.ajouter.length || d.retirer.length; }).length;
   if (tab) tab.textContent = '👥 Équipe' + (aIntegrer ? ` (${aIntegrer} 📥)` : '');
   if (!liste.length) { el.innerHTML = '<p class="hint">Aucune arrivée reçue pour le moment.</p>'; return; }
@@ -1117,7 +1215,7 @@ function renderArriveesRecues() {
     }).join('');
     h += `<tr><td>${escapeHtml(s.nom || '?')}<div class="hint">${escapeHtml(s.email || '')}</div></td><td><b>${s.arrivees.length}</b></td>
       <td>${s.majLe ? new Date(s.majLe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</td><td>${etat}</td>
-      <td>${ok ? '' : `<button class="go small" onclick="integrerArrivees('${s.sessionId}')">Intégrer</button>`}</td></tr>
+      <td style="white-space:nowrap;">${ok ? '' : `<button class="go small" onclick="integrerArrivees('${s.sessionId}')">Intégrer</button> `}<button class="danger small" onclick="supprimerListeArrivees('${s.sessionId}')" title="Liste non conforme ou erronée">🗑 Supprimer</button></td></tr>
       <tr><td colspan="5" style="padding:0 8px 8px;"><details ${ouverts[s.sessionId] ? 'open' : ''} ontoggle="equipeEtat.arrOuverts['${s.sessionId}']=this.open"><summary class="hint" style="cursor:pointer;">Voir le détail (${s.arrivees.length})</summary>
       ${lignes ? `<div class="scroll"><table><thead><tr><th>#</th><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th></tr></thead><tbody>${lignes}</tbody></table></div>` : '<p class="hint">Aucune arrivée.</p>'}</details></td></tr>`;
   });
@@ -1200,7 +1298,7 @@ async function importerDepuisDrive() {
 async function publierConfigSurDrive() {
   if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
   const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
-    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })), classementEquipes: eqParams() };
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure, distance: v.distance || '' })), classementEquipes: eqParams() };
   try {
     Progress.show('Publication…');
     Progress.indeterminate('🔐 Authentification Google…');
@@ -1297,10 +1395,12 @@ function getCategorieForAnnee(annee) {
 function regenerateVagues() {
   const old = {}; DB.vagues.forEach(v => old[v.id] = v);
   DB.vagues = [];
-  computeCategories(DB.anneeLimite).forEach(c => ['G', 'F'].forEach(sx => {
+  // Catég. 4 → 1, Filles avant Garçons
+  computeCategories(DB.anneeLimite).slice().reverse().forEach(c => ['F', 'G'].forEach(sx => {
     const id = `${c.id}_${sx}`;
     DB.vagues.push({ id, catId: c.id, sexe: sx, nom: `${c.nom} — ${sx === 'G' ? 'Garçons' : 'Filles'}`,
-      heure: old[id] ? old[id].heure : '', depart: old[id] ? old[id].depart : null, fin: old[id] ? (old[id].fin || null) : null });
+    heure: old[id] ? old[id].heure : '', distance: old[id] ? (old[id].distance || '') : '',
+    depart: old[id] ? old[id].depart : null, fin: old[id] ? (old[id].fin || null) : null });
   }));
 }
 function saveAnneeLimite() {
@@ -1313,6 +1413,7 @@ function saveCourseInfo() {
   DB.course.nom = document.getElementById('input-course-nom').value.trim();
   DB.course.date = document.getElementById('input-course-date').value;
   DB.course.ville = document.getElementById('input-course-ville').value.trim();
+  DB.course.locale = document.getElementById('input-course-locale').value.trim();
   DB.course.titreAr = document.getElementById('input-course-titre-ar').value.trim() || 'البطولة الإقليمية للعدو الريفي';
   saveDB(); renderAll();
 }
@@ -1331,6 +1432,9 @@ function saveEquipesParams() {
   saveDB(); renderParametres();
 }
 function setHeureVague(id, val) { const v = DB.vagues.find(x => x.id === id); if (v) v.heure = val; saveDB(); }
+
+function setDistanceVague(id, val) { const v = DB.vagues.find(x => x.id === id); if (v) v.distance = val; saveDB(); }
+
 function renderParametres() {
   document.getElementById('input-course-nom').value = DB.course.nom || '';
   document.getElementById('input-course-date').value = DB.course.date || '';
@@ -1341,21 +1445,23 @@ function renderParametres() {
   majLibellesDepartage();
   document.getElementById('course-name-display').textContent = DB.course.nom || '';
   document.getElementById('input-course-ville').value = DB.course.ville || '';
+  document.getElementById('input-course-locale').value = DB.course.locale || '';
   document.getElementById('input-course-titre-ar').value = DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي';
   const cl = document.getElementById('categories-list');
   cl.innerHTML = DB.anneeLimite
     ? `<p style="color:#b91c1c;font-size:.8em;margin:6px 0;">Né en ${DB.anneeLimite - 1} ou avant : exclu.</p>` + computeCategories(DB.anneeLimite).map(c => `<span class="chip">${escapeHtml(c.nom)}</span>`).join('')
     : '<p class="hint">Définissez l\'année limite.</p>';
   document.getElementById('vagues-list').innerHTML = DB.vagues.length
-    ? '<table style="margin-top:12px;"><thead><tr><th>#</th><th>Course (vague)</th><th>Heure de départ prévue</th><th>Inscrits</th></tr></thead><tbody>' +
+    ? '<table style="margin-top:12px;"><thead><tr><th>#</th><th>Course (vague)</th><th>Heure de départ prévue</th><th>Distance</th><th>Inscrits</th></tr></thead><tbody>' +
       DB.vagues.map((v, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(v.nom)}</td>
         <td><input type="time" value="${v.heure || ''}" onchange="setHeureVague('${v.id}', this.value)"></td>
+        <td><input type="text" value="${v.distance || ''}" onchange="setDistanceVague('${v.id}', this.value)"></td>
         <td>${coureursDeVague(v.id).length}</td></tr>`).join('') + '</tbody></table>' : '';
 }
 function exportConfig() {
   if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
   const cfg = { course: DB.course, anneeScolaire: anneeScolaireFromDate(DB.course.date), anneeLimite: DB.anneeLimite, categories: computeCategories(DB.anneeLimite),
-    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure })), classementEquipes: eqParams() };
+    courses: DB.vagues.map(v => ({ id: v.id, nom: v.nom, heure: v.heure, distance: v.distance })), classementEquipes: eqParams() };
   dl(JSON.stringify(cfg, null, 2), (DB.course.nom || 'SmartCross') + '_Config.json', 'application/json');
 }
 function resetAll() {
@@ -1848,6 +1954,7 @@ function tablePodium(vagueId) {
     rows.map((r, i) => `<tr><td><b>${medal(i)} ${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td>${r.c.elite ? '<span class="badge elite">⭐ Élite</span>' : '<span class="badge">Sport pour tous</span>'}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
 }
 function renderClassements() {
+  renderRapportSelect();
   const sel = document.getElementById('clas-vague'), cur = sel.value;
   sel.innerHTML = DB.vagues.map(v => `<option value="${v.id}">${escapeHtml(v.nom)}</option>`).join('');
   if (cur && DB.vagues.some(v => v.id === cur)) sel.value = cur;
@@ -1864,6 +1971,263 @@ function exportClassementsCSV() {
     rows.push([v.nom, el ? 'Elite' : 'Sport pour tous', i + 1, r.c.dossard, r.c.codeMassar, r.c.nomComplet, r.c.etablissement, fmtTime(r.temps)]))));
   if (rows.length === 1) { showToast('Aucun résultat à exporter'); return; }
   dl('\uFEFF' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\n'), (DB.course.nom || 'SmartCross') + '_Classements.csv', 'text/csv');
+}
+
+/* ===================== RAPPORT TECHNIQUE (PDF) ===================== */
+const LOGO_MIN_URL  = 'https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/logo-ministere.png';
+const LOGO_AREF_URL = 'https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/logo-frmss.png';
+
+// Classement par équipes d'une (vague, sous-catégorie) : somme des places des N premiers
+function classementEquipes(vagueId, elite) {
+  const params = eqParams();
+  const N = params.nbMin || 4;                     // défaut = 4 (barème du rapport officiel)
+  const arr = classementDe(vagueId, elite);        // [{c, ts, temps}, ...] déjà triés
+  const parEtab = {};
+  arr.forEach((r, idx) => {
+    const etab = r.c.etablissement || '(sans établissement)';
+    (parEtab[etab] = parEtab[etab] || []).push({ ...r, position: idx + 1 });
+  });
+  const res = [];
+  for (const etab in parEtab) {
+    const eq = parEtab[etab];
+    if (eq.length < N) continue;                   // équipe incomplète : non classée
+    const top = eq.slice(0, N);
+    const total = top.reduce((s, r) => s + r.position, 0);
+    res.push({ etablissement: etab, top, total });
+  }
+  res.sort((a, b) => {
+    if (a.total !== b.total) return a.total - b.total;
+    // Départage : meilleur 1ᵉʳ coureur, ou meilleur Nᵉ coureur
+    const ia = params.departage === 'premier' ? 0 : N - 1;
+    return a.top[ia].position - b.top[ia].position;
+  });
+  return res.slice(0, 3);                          // top 3 seulement
+}
+
+// N° de course : Catég. 4 → 1, Filles d'abord (1 = Catég. 4 F, 2 = Catég. 4 G, … 8 = Catég. 1 G), indépendant de l'ordre du tableau
+function numeroVague(v) {
+  const n = parseInt(String(v.catId || '').replace('categ', ''), 10);
+  if (n >= 1 && n <= 4 && (v.sexe === 'F' || v.sexe === 'G')) return (4 - n) * 2 + (v.sexe === 'F' ? 1 : 2);
+  return DB.vagues.indexOf(v) + 1;
+}
+function renderRapportSelect() {
+  const sel = document.getElementById('rapport-vague'); if (!sel) return;
+  const cur = sel.value;
+  const liste = DB.vagues.slice().sort((a, b) => numeroVague(a) - numeroVague(b));
+  sel.innerHTML = liste.map(v => `<option value="${v.id}">${numeroVague(v)} — ${escapeHtml(v.nom)}</option>`).join('');
+  if (cur && liste.some(v => v.id === cur)) sel.value = cur;
+}
+
+// Date JJ/MM/AAAA (sans décalage de fuseau horaire)
+function fmtDateRapport(s) {
+  if (!s) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(s);
+}
+
+// Une page = une (vague, sous-catégorie)
+function renderReportPage(vague, index, elite) {
+  const N = eqParams().nbMin || 4;
+  const rows = classementDe(vague.id, elite);      // participants classés de cette sous-catégorie
+  const equipes = classementEquipes(vague.id, elite);
+
+  const catLabel = vague.nom.split(' — ')[0];                       // ex : "Catég. 4 (2014-2015)"
+  const sexeAr   = vague.sexe === 'G' ? 'ذكور' : 'إناث';
+  const sousAr   = elite ? 'نخبة' : 'رياضة للجميع';
+  // <bdi dir="ltr"> : isole le libellé latin pour que parenthèses et années ne soient pas réordonnées dans le texte arabe
+  const categorie = `<span>${sexeAr}</span> · <span>${sousAr}</span> · <bdi dir="ltr">${escapeHtml(catLabel)}</bdi>`;
+
+  // Heure : heure prévue saisie dans les paramètres des courses (pas le départ réel)
+  const heure = /^\d{1,2}:\d{2}/.test(vague.heure || '') ? String(vague.heure).slice(0, 5) : (vague.heure || '—');
+  const dist  = vague.distance || '';
+  const ville = DB.course.ville || '';
+
+  // 20 lignes individuelles (vides si moins de 20 classés)
+  let rowsIndiv = '';
+  for (let i = 0; i < 20; i++) {
+    const r = rows[i];
+    if (r) {
+      rowsIndiv += `<tr>
+        <td class="num">${i + 1}</td>
+        <td dir="auto">${escapeHtml(r.c.nomComplet)}</td>
+        <td dir="auto">${escapeHtml(r.c.etablissement || '')}</td>
+        <td dir="auto">${escapeHtml(ville)}</td>
+        <td class="num">${r.c.dossard || ''}</td>
+        <td class="num"></td>
+      </tr>`;
+    } else {
+      rowsIndiv += `<tr><td class="num">${i + 1}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+    }
+  }
+
+  // Colonnes dynamiques pour le tableau équipes : 1, 2, 3, ..., N
+  let eqHeadNums = '', eqCols = '';
+  for (let k = 1; k <= N; k++) { eqHeadNums += `<th>${k}</th>`; eqCols += '<col style="width:46px">'; }
+
+  // 3 lignes équipes (vides si moins de 3 classées)
+  let rowsEq = '';
+  for (let i = 0; i < 3; i++) {
+    const eq = equipes[i];
+    if (eq) {
+      let cells = '';
+      for (let k = 0; k < N; k++) cells += `<td class="num">${eq.top[k] ? eq.top[k].position : ''}</td>`;
+      rowsEq += `<tr>
+        <td class="num">${i + 1}</td>
+        <td dir="auto">${escapeHtml(eq.etablissement)}</td>
+        ${cells}
+        <td class="num"><b>${eq.total}</b></td>
+      </tr>`;
+    } else {
+      rowsEq += `<tr><td class="num">${i + 1}</td><td></td>${'<td></td>'.repeat(N)}<td></td></tr>`;
+    }
+  }
+
+  return `
+    <div class="rep-header">
+      <img class="rep-logo-aref" src="${LOGO_AREF_URL}" alt="" crossorigin="anonymous">
+      <div class="rep-header-center">
+        <img class="rep-logo-min" src="${LOGO_MIN_URL}" alt="" crossorigin="anonymous">
+        <div class="rep-titre-ar">${escapeHtml(DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي')}</div>
+        <div class="rep-subline">
+          <span dir="ltr">${escapeHtml(fmtDateRapport(DB.course.date))}</span>
+          <span class="rep-locale"><b>المكان : </b>${escapeHtml(DB.course.locale || '')}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rep-main-title">النتائج الفنية</div>
+
+    <table class="rep-bandeau">
+      <colgroup><col style="width:15%"><col style="width:15%"><col style="width:16%"><col></colgroup>
+      <thead>
+        <tr>
+          <th>رقم المسابقة</th>
+          <th>الساعة</th>
+          <th>المسافة</th>
+          <th>الفئة</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${index}</td>
+          <td><bdi dir="ltr">${escapeHtml(heure)}</bdi></td>
+          <td dir="auto">${escapeHtml(dist)}</td>
+          <td class="cat-cell">${categorie}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="rep-section-title">الترتيب الفردي</div>
+    <table class="rep-table rep-indiv">
+      <colgroup>
+        <col style="width:48px"><col><col style="width:200px"><col style="width:120px"><col style="width:84px"><col style="width:76px">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>الرتبة</th>
+          <th>الإسم و النسب</th>
+          <th>المؤسسة</th>
+          <th>المديرية الإقليمية</th>
+          <th>رقم الصدرية</th>
+          <th>الإنجاز</th>
+        </tr>
+      </thead>
+      <tbody>${rowsIndiv}</tbody>
+    </table>
+
+    <div class="rep-section-title">الترتيب حسب الفرق</div>
+    <table class="rep-table rep-eq">
+      <colgroup><col style="width:48px"><col>${eqCols}<col style="width:104px"></colgroup>
+      <thead>
+        <tr>
+          <th>الرتبة</th>
+          <th>المؤسسة / المديرية الإقليمية</th>
+          ${eqHeadNums}
+          <th>مجموع النقط</th>
+        </tr>
+      </thead>
+      <tbody>${rowsEq}</tbody>
+    </table>
+
+    <div class="rep-signature">
+      <span class="rep-sig-line">إمضاء المسؤول</span>
+    </div>`;
+}
+
+// Attend la police arabe (Cairo) et les logos avant de « photographier » la page ; ne bloque jamais plus de ~5 s (hors-ligne)
+async function preparerRenduRapport(page) {
+  const patience = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
+  try {
+    if (document.fonts && document.fonts.load) {
+      await patience(Promise.all([400, 600, 700, 800].map(w => document.fonts.load(`${w} 14px Cairo`, 'عA1'))), 5000);
+      await patience(document.fonts.ready, 2000);
+    }
+  } catch (e) { /* police indisponible : repli sur Segoe UI / Tahoma */ }
+  const imgs = [...page.querySelectorAll('img')];
+  await patience(Promise.all(imgs.map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; }))), 5000);
+  imgs.forEach(im => { if (!im.complete || !im.naturalWidth) im.style.display = 'none'; }); // logo introuvable : pas d'icône cassée
+}
+
+// Réduit la taille du texte des cellules trop longues (noms, établissements) au lieu de les tronquer
+function ajusterTextesRapport(page) {
+  page.querySelectorAll('.rep-table th, .rep-table td, .rep-bandeau th, .rep-bandeau td').forEach(cell => {
+    let fs = parseFloat(getComputedStyle(cell).fontSize), n = 0;
+    while (cell.scrollWidth > cell.clientWidth + 1 && fs > 7 && n++ < 30) { fs -= 0.5; cell.style.fontSize = fs + 'px'; }
+  });
+}
+
+async function generateRapportTechniquePDF() {
+  if (!DB.anneeLimite) { showToast('Définissez l\'année limite'); return; }
+  if (!DB.vagues.length) { showToast('Aucune course générée'); return; }
+  const h2c = window.html2canvas;
+  if (!h2c) { showToast('Librairie html2canvas non chargée (connexion internet ?)'); return; }
+  if (!window.jspdf) { showToast('Librairie jsPDF non chargée (connexion internet ?)'); return; }
+
+  // Uniquement la course choisie : 2 pages (Élite puis Sport pour tous)
+  const selV = document.getElementById('rapport-vague');
+  const vChoisie = DB.vagues.find(v => v.id === (selV && selV.value));
+  if (!vChoisie) { showToast('Choisissez une course'); return; }
+  const numV = numeroVague(vChoisie);
+  const jobs = [
+    { vague: vChoisie, index: numV, elite: true  },
+    { vague: vChoisie, index: numV, elite: false }
+  ];
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const stage = document.getElementById('pdf-stage');
+
+  Progress.show(`Génération du rapport (${jobs.length} pages)…`);
+  try {
+    for (let p = 0; p < jobs.length; p++) {
+      const j = jobs[p];
+      stage.innerHTML = '';
+      const page = document.createElement('div');
+      page.className = 'report-page';
+      page.innerHTML = renderReportPage(j.vague, j.index, j.elite);
+      stage.appendChild(page);
+
+      await preparerRenduRapport(page);
+      ajusterTextesRapport(page);
+
+      const canvas = await h2c(page, { scale: 2.5, backgroundColor: '#ffffff', useCORS: true, logging: false, imageTimeout: 8000 });
+      if (p > 0) doc.addPage();
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
+
+      Progress.set(3 + Math.round(((p + 1) / jobs.length) * 92),
+        `📄 Page ${p + 1}/${jobs.length} — ${j.vague.nom} ${j.elite ? '(Élite)' : '(SPT)'}`);
+    }
+    const suffixe = DB.course.date || '';
+    doc.save((DB.course.nom || 'SmartCross') + '_RapportTechnique_Course' + numV + (suffixe ? '_' + suffixe : '') + '.pdf');
+    Progress.done(`✅ Rapport généré (${jobs.length} pages)`);
+    showToast('Rapport technique généré');
+  } catch (e) {
+    console.error('Rapport technique :', e);
+    Progress.error('❌ Échec de la génération du rapport : ' + (e && e.message ? e.message : e));
+    showToast('Erreur lors de la génération du rapport');
+  } finally {
+    stage.innerHTML = '';
+  }
 }
 
 /* ===================== 13. INIT ===================== */
