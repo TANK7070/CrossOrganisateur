@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.025</title>
+<title>SmartCross - Organisateur v2.027</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -356,11 +356,11 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <div class="field"><label>Locale</label><input id="input-course-locale" type="text" onchange="saveCourseInfo()" style="width:180px;" placeholder="Ex: المركز الجهوي / CEI"></div>
     <div class="field"><label>Titre arabe (en-tête du dossard)</label><input id="input-course-titre-ar" type="text" onchange="saveCourseInfo()" dir="rtl" style="width:380px;" placeholder="البطولة الإقليمية للعدو الريفي"></div>
   </div>
-  <p class="hint">L'année scolaire (ex : 2025-2026) est calculée automatiquement à partir de la date : septembre→décembre = Y/Y+1, janvier→août = Y-1/Y. Les modifications sont prises en compte immédiatement ; le bouton « 💾 Sauvegarder » (en haut) les envoie sur le Drive.</p>
+  <p class="hint">Les modifications sont prises en compte immédiatement et le bouton "💾 Sauvegarder" les envoie sur le Drive.</p>
 </div>
   <div class="card">
     <h2>Catégories d'âge et courses (vagues)</h2>
-    <p class="hint">Année de naissance limite du communiqué administratif (né avant = exclu). Les 4 catégories (tranches de 2 ans) et les <b>8 courses</b> (4 catégories × Garçons/Filles) en découlent ; chaque course = une vague avec son propre départ. Dans chaque course, « Élite » et « Sport pour tous » partent ensemble mais ont chacun leur classement.</p>
+    <p class="hint">Année de naissance limite du communiqué administratif (né avant = exclu). Les 4 catégories (tranches de 2 ans) et les <b>8 courses</b> (4 catégories × Garçons/Filles) en découlent ; chaque course = une vague avec son propre départ. Dans chaque course, "Élite" et "Sport pour tous" partent ensemble mais ont chacun leur classement.</p>
     <div class="row">
       <div class="field"><label>Année limite</label><input id="input-annee-limite" type="number" placeholder="Ex: 2008" style="width:120px;"></div>
       <button onclick="saveAnneeLimite()">Calculer les catégories et les 8 courses</button>
@@ -370,7 +370,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   </div>
   <div class="card">
     <h2>Classement par équipes</h2>
-    <p class="hint">Le score d'une équipe = somme des places de ses <b>N premiers coureurs</b> à l'arrivée (le total le plus bas gagne). Une équipe qui a moins de N arrivants n'est pas classée.</p>
+    <p class="hint">Nombre de coureurs minimal <b>N</b> pour le score d'équipe.</p>
     <div class="row">
       <div class="field"><label>Nombre minimal N de coureurs requis pour le score d'équipe</label><input id="input-eq-nbmin" type="number" min="1" step="1" placeholder="Ex: 4" style="width:120px;" oninput="majLibellesDepartage()" onchange="saveEquipesParams()"></div>
     </div>
@@ -382,7 +382,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
   </div>
   <div class="card">
     <h2>Configuration pour les équipes</h2>
-    <p class="hint">Publiez l'année limite et les 8 courses sur le Drive partagé : les apps des équipes les liront automatiquement.</p>
+    <p class="hint">Publiez les paramètres sur le Drive pour être reçus par "SmartCross - Équipe" des profs accompagnateurs.</p>
     <div class="row">
       <button class="secondary" onclick="exportConfig()">⬇️ Exporter la configuration (JSON)</button>
       <button onclick="publierConfigSurDrive()">☁️ Publier sur le Drive</button>
@@ -400,7 +400,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 <section id="sec-inscriptions" class="section">
   <div class="card">
     <h2>Importer les listes des équipes</h2>
-    <p class="hint">Fichiers JSON générés par les profs accompagnateurs (SmartCross - Equipe). Clé primaire = code Massar : réimporter met à jour sans doublon.</p>
+    <p class="hint">Importez les listes générées et exportées par les profs accompagnateurs par "SmartCross - Équipe". Réimportez pour mettre à jour en cas de besoin.</p>
     <div class="row">
       <input type="file" id="import-equipes" accept=".json" multiple>
       <button onclick="importerDepuisDrive()">🔄 Importer depuis le Drive</button>
@@ -449,7 +449,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 <section id="sec-dossards" class="section">
   <div class="card">
     <h2>Génération des dossards</h2>
-    <p class="hint">Chaque dossard : n°, nom, établissement, course, mention Élite, et QR code = code Massar (lu à l'arrivée). PDF A4, 8 dossards par page.</p>
+    <p class="hint">Chaque dossard : n°, nom, établissement, course, mention Élite, et QR code (Scanné à l'arrivée). PDF A4, 2 dossards par page.</p>
     <div class="row">
       <button onclick="renderDossardPreview()">🔄 Actualiser l'aperçu</button>
       <button class="go" onclick="generateDossardsPDF()">📄 Générer le PDF de tous les dossards</button>
@@ -486,6 +486,7 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <canvas id="scan-canvas" style="display:none;"></canvas>
     <div id="last-arrival">En attente de la première arrivée…</div>
     <h3>Arrivées enregistrées (<span id="arrivees-count">0</span>)</h3>
+    <p id="arrivees-masquees" class="hint"></p>
     <div class="scroll"><table>
       <thead><tr><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th><th>Saisie</th><th></th></tr></thead>
       <tbody id="arrivees-tbody"></tbody>
@@ -647,7 +648,7 @@ if (isDirty()) dirtySince = DB.majLe;
 function majIndicateurSauvegarde() {
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status'), bn = document.getElementById('save-banner');
   if (!btn) return;
-  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.025'; return; }
+  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.027'; return; }
   const dirty = isDirty();
   btn.classList.toggle('dirty', dirty);
   const sy = getSync();
@@ -661,7 +662,7 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.025';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.027';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -1400,7 +1401,7 @@ function regenerateVagues() {
     const id = `${c.id}_${sx}`;
     DB.vagues.push({ id, catId: c.id, sexe: sx, nom: `${c.nom} — ${sx === 'G' ? 'Garçons' : 'Filles'}`,
     heure: old[id] ? old[id].heure : '', distance: old[id] ? (old[id].distance || '') : '',
-    depart: old[id] ? old[id].depart : null, fin: old[id] ? (old[id].fin || null) : null });
+    depart: old[id] ? old[id].depart : null, fin: old[id] ? (old[id].fin || null) : null, listeNettoyee: old[id] ? !!old[id].listeNettoyee : false });
   }));
 }
 function saveAnneeLimite() {
@@ -1812,7 +1813,20 @@ async function terminerCourse(id) {
 function rouvrirCourse(id) {
   const v = DB.vagues.find(x => x.id === id); if (!v || !v.fin) return;
   if (!confirm('Rouvrir cette course ? Le chrono reprend et les arrivées peuvent de nouveau être enregistrées.')) return;
-  v.fin = null; saveDB(); renderAll();
+  v.fin = null; v.listeNettoyee = false; saveDB(); renderAll();
+}
+// Nettoyage de la liste « Arrivées enregistrées » d'une course terminée : affichage seulement,
+// les arrivées restent dans DB.arrivees (classements, rapport, sauvegarde, export CSV inchangés)
+function nettoyerListeArrivees(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v || !v.fin) return;
+  const n = nbArriveesVague(id);
+  if (!confirm(`Nettoyer la liste des arrivées de « ${v.nom} » ?\n\n${n} arrivée(s) seront retirées de cette liste.\nElles restent enregistrées et visibles dans l'onglet Classements (vous pouvez aussi les réafficher ici).`)) return;
+  v.listeNettoyee = true; saveDB(); renderCourse();
+  showToast(`🧹 Liste nettoyée : ${v.nom} (données conservées)`);
+}
+function reafficherListeArrivees(id) {
+  const v = DB.vagues.find(x => x.id === id); if (!v) return;
+  v.listeNettoyee = false; saveDB(); renderCourse();
 }
 function chronoHtml(v) {
   if (!v.depart) return '—';
@@ -1828,7 +1842,9 @@ function renderCourse() {
         const ins = coureursDeVague(v.id), arr = nbArriveesVague(v.id);
         const etat = !v.depart ? '<span class="badge">Non parti</span>' : v.fin ? `<span class="badge warn">🏁 Terminée à ${fmtClock(v.fin)}</span>` : '<span class="badge ok">En cours</span>';
         const action = !v.depart ? `<button class="go" onclick="topDepart('${v.id}')">🚦 Top départ</button>`
-          : v.fin ? `<button class="secondary small" onclick="rouvrirCourse('${v.id}')">Rouvrir</button>`
+          : v.fin ? `<button class="secondary small" onclick="rouvrirCourse('${v.id}')">Rouvrir</button> ` + (v.listeNettoyee
+            ? `<button class="secondary small" onclick="reafficherListeArrivees('${v.id}')" title="Remettre les arrivées de cette course dans la liste">👁 Réafficher</button>`
+            : `<button class="small" onclick="nettoyerListeArrivees('${v.id}')" title="Retire les arrivées de la liste ci-dessous ; elles restent dans Classements">🧹 Nettoyer</button>`)
           : `<button onclick="terminerCourse('${v.id}')">🏁 Terminée</button>` + (arr === 0 ? ` <button class="secondary small" onclick="annulerDepart('${v.id}')" title="Top départ lancé par erreur">Annuler</button>` : '');
         return `<tr><td>${escapeHtml(v.nom)}</td><td>${v.heure || '—'}</td><td>${ins.length}</td><td>${arr}</td>
           <td>${v.depart ? `<span class="badge ok">${fmtClock(v.depart)}</span>` : '—'}</td><td>${chronoHtml(v)}</td><td>${etat}</td><td>${action}</td></tr>`;
@@ -1913,9 +1929,13 @@ function supprimerArrivee(code) {
   if (monRole === 'arrivee') marquerArrChange();
   saveDB(); renderCourse();
 }
+function arriveeMasquee(a) { const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null; return !!(v && v.listeNettoyee); }
 function renderArrivees() {
-  document.getElementById('arrivees-count').textContent = DB.arrivees.length;
-  document.getElementById('arrivees-tbody').innerHTML = DB.arrivees.slice().sort((a, b) => a.ts - b.ts).map(a => {
+  const visibles = DB.arrivees.filter(a => !arriveeMasquee(a)), nbMasq = DB.arrivees.length - visibles.length;
+  document.getElementById('arrivees-count').textContent = visibles.length;
+  const mh = document.getElementById('arrivees-masquees');
+  if (mh) mh.textContent = nbMasq ? `🧹 ${nbMasq} arrivée(s) de courses nettoyées masquée(s) — toujours enregistrées et visibles dans Classements.` : '';
+  document.getElementById('arrivees-tbody').innerHTML = visibles.sort((a, b) => a.ts - b.ts).map(a => {
     const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null;
     return `<tr><td>${fmtClock(a.ts)}</td><td>${c ? '#' + c.dossard : '?'}</td><td dir="auto">${c ? escapeHtml(c.nomComplet) : escapeHtml(a.codeMassar)}</td>
       <td>${v ? escapeHtml(v.nom) : '—'}</td><td>${v && v.depart ? fmtTime(a.ts - v.depart) : '—'}</td><td>${a.source}</td>
@@ -2231,7 +2251,13 @@ async function generateRapportTechniquePDF() {
 }
 
 /* ===================== 13. INIT ===================== */
-function renderAll() { renderParametres(); renderCoureurs(); renderCourse(); renderClassements(); majIndicateurSauvegarde(); }
+// Remet les courses dans l'ordre Catég. 4 → 1, Filles avant Garçons (y compris pour les données déjà enregistrées dans l'ancien ordre)
+function trierVagues() {
+  if (!DB || !Array.isArray(DB.vagues)) return;
+  const cle = new Map(DB.vagues.map(v => [v, numeroVague(v)]));
+  DB.vagues.sort((a, b) => cle.get(a) - cle.get(b));
+}
+function renderAll() { trierVagues(); renderParametres(); renderCoureurs(); renderCourse(); renderClassements(); majIndicateurSauvegarde(); }
 // Certains navigateurs (Firefox) réinjectent les valeurs des champs après un rechargement : on les remet à zéro
 document.querySelectorAll('input, textarea').forEach(e => {
   if (e.type === 'file' || e.type === 'button') return;
