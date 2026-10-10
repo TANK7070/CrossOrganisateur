@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.027</title>
+<title>SmartCross - Organisateur v2.029</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -508,7 +508,8 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     </div>
     <div id="clas-summary" class="hint"></div>
   </div>
-  <div class="card"><h3>🏅 Podium <span class="hint" style="font-weight:400;">(4 premiers, toutes sous-catégories confondues)</span></h3><div id="clas-podium"></div></div>
+  <div class="card"><h3>🏅 Podium ⭐ Élite <span class="hint" style="font-weight:400;">(<span class="podium-n"></span> premiers)</span></h3><div id="clas-podium-elite"></div></div>
+  <div class="card"><h3>🏅 Podium Sport pour tous <span class="hint" style="font-weight:400;">(<span class="podium-n"></span> premiers)</span></h3><div id="clas-podium-spt"></div></div>
   <div class="card"><h3>⭐ Élite</h3><div id="clas-elite"></div></div>
   <div class="card"><h3>Sport pour tous</h3><div id="clas-spt"></div></div>
 </section>
@@ -652,7 +653,7 @@ if (isDirty()) dirtySince = DB.majLe;
 function majIndicateurSauvegarde() {
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status'), bn = document.getElementById('save-banner');
   if (!btn) return;
-  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.027'; return; }
+  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.029'; return; }
   const dirty = isDirty();
   btn.classList.toggle('dirty', dirty);
   const sy = getSync();
@@ -666,7 +667,7 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.027';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.029';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -1291,6 +1292,7 @@ async function importerDepuisDrive() {
       } catch (err) { stats.rep.push(`${escapeHtml(f.name)} : erreur (${escapeHtml(err.message)})`); }
     }
 
+    retirerCoureursAbsents(stats);
     saveDB(); renderAll();
     afficherRapportImport(stats);
     Progress.done(`✅ ${files.length - (stats.ignores || 0)} équipe(s) importée(s)`);
@@ -1497,7 +1499,7 @@ function addCoureur() {
   if (!code || !nom || !annee) { showToast('Code Massar, nom et année de naissance requis'); return; }
   if (!DB.anneeLimite) { showToast('Définissez d\'abord l\'année limite'); return; }
   if (!getCategorieForAnnee(annee)) { showToast(`Exclu : né en ${annee} (limite ${DB.anneeLimite})`); return; }
-  upsertCoureur({ codeMassar: code, nomComplet: nom, sexe, anneeNaissance: annee, elite, etablissement: etab, classe: '' });
+  upsertCoureur({ codeMassar: code, nomComplet: nom, sexe, anneeNaissance: annee, elite, etablissement: etab, classe: '', manuel: true });
   saveDB(); ['ins-code','ins-nom','ins-annee'].forEach(i => document.getElementById(i).value = ''); document.getElementById('ins-elite').checked = false;
   renderAll(); showToast('Coureur inscrit');
 }
@@ -1529,6 +1531,8 @@ function estJsonEquipe(data) {
 function traiterEquipe(data, label, stats) {
   if (estFichierSysteme(label) || !estJsonEquipe(data)) { stats.ignores = (stats.ignores || 0) + 1; stats.rep.push(`${escapeHtml(label)} : ignoré (pas une inscription d'équipe)`); return; }
   let fn = 0;
+  const etab = String(data.etablissement || '').trim();
+  if (etab) (stats.etabs = stats.etabs || new Set()).add(etab);
   data.participants.forEach(p => {
     if (!p.codeMassar) return;
     if (!getCategorieForAnnee(p.anneeNaissance)) { stats.excl++; return; }
@@ -1536,12 +1540,31 @@ function traiterEquipe(data, label, stats) {
     const r = upsertCoureur({ codeMassar: p.codeMassar, nomComplet: p.nomComplet, sexe: p.sexe || '', anneeNaissance: p.anneeNaissance,
       elite: !!p.elite, etablissement: data.etablissement || '', classe: p.classe || '' });
     r === 'new' ? stats.n++ : stats.maj++; fn++;
+    (stats.codes = stats.codes || new Set()).add(p.codeMassar);
   });
   stats.rep.push(`${escapeHtml(data.etablissement || label)} : ${fn} participant(s)`);
 }
+// Synchronisation après import : un coureur d'un établissement dont la liste vient d'être importée et qui ne figure plus
+// dans AUCUNE des listes importées est retiré (un coureur muté vers une autre équipe est conservé, mis à jour par l'upsert).
+// Gardés : inscriptions manuelles (manuel:true) et coureurs ayant déjà une arrivée enregistrée (résultats protégés).
+function retirerCoureursAbsents(stats) {
+  const etabs = stats.etabs || new Set(), codes = stats.codes || new Set();
+  stats.retires = []; stats.gardes = [];
+  if (!etabs.size) return;
+  const aArrivee = new Set(DB.arrivees.map(a => a.codeMassar));
+  const sortants = DB.coureurs.filter(c => etabs.has(String(c.etablissement || '').trim()) && !codes.has(c.codeMassar) && !c.manuel);
+  sortants.forEach(c => {
+    if (aArrivee.has(c.codeMassar)) { stats.gardes.push(c); return; }
+    stats.retires.push(c);
+  });
+  const rm = new Set(stats.retires.map(c => c.codeMassar));
+  DB.coureurs = DB.coureurs.filter(c => !rm.has(c.codeMassar));
+}
 function afficherRapportImport(stats) {
   document.getElementById('import-report').innerHTML = `<div class="warn-banner" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46;">
-    ${stats.n} nouveau(x), ${stats.maj} mis à jour${stats.excl ? `, ${stats.excl} exclu(s) (hors âge)` : ''}${stats.ignores ? `, ${stats.ignores} fichier(s) ignoré(s) (non-équipe)` : ''}${stats.sansSexe ? `, ⚠️ ${stats.sansSexe} sans sexe (à corriger)` : ''}<br>${stats.rep.join('<br>')}</div>`;
+    ${stats.n} nouveau(x), ${stats.maj} mis à jour${stats.excl ? `, ${stats.excl} exclu(s) (hors âge)` : ''}${stats.ignores ? `, ${stats.ignores} fichier(s) ignoré(s) (non-équipe)` : ''}${stats.sansSexe ? `, ⚠️ ${stats.sansSexe} sans sexe (à corriger)` : ''}${stats.retires && stats.retires.length ? `, 🗑️ ${stats.retires.length} retiré(s) (plus dans leur liste d'équipe)` : ''}<br>${stats.rep.join('<br>')}` +
+    (stats.retires && stats.retires.length ? `<br>🗑️ Retirés : ` + stats.retires.map(c => `${escapeHtml(c.nomComplet)} (${escapeHtml(c.etablissement || '')}${c.dossard ? ', #' + c.dossard : ''})`).join(' ; ') : '') +
+    (stats.gardes && stats.gardes.length ? `<br>⚠️ Conservés car déjà classés (absents de leur liste) : ` + stats.gardes.map(c => escapeHtml(c.nomComplet)).join(' ; ') : '') + `</div>`;
 }
 document.getElementById('import-equipes').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files); const stats = { n: 0, maj: 0, excl: 0, sansSexe: 0, rep: [] };
@@ -1550,6 +1573,7 @@ document.getElementById('import-equipes').addEventListener('change', async (e) =
     try { traiterEquipe(JSON.parse(await f.text()), f.name, stats); }
     catch (err) { stats.rep.push(`${escapeHtml(f.name)} : erreur (${escapeHtml(err.message)})`); }
   }
+  retirerCoureursAbsents(stats);
   saveDB(); e.target.value = ''; renderAll();
   afficherRapportImport(stats);
 });
@@ -1980,30 +2004,27 @@ function tableClassement(vagueId, elite) {
   return head + '<table><thead><tr><th>Rang</th><th>Dossard</th><th>Nom complet</th><th>Établissement</th><th>Temps</th></tr></thead><tbody>' +
     rows.map((r, i) => `<tr><td><b>${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
 }
-function podiumDe(vagueId) {
-  const v = DB.vagues.find(x => x.id === vagueId); if (!v || !v.depart) return [];
-  return coureursDeVague(vagueId)
-    .map(c => ({ c, a: DB.arrivees.find(x => x.codeMassar === c.codeMassar) })).filter(r => r.a)
-    .sort((x, y) => x.a.ts - y.a.ts).map(r => ({ c: r.c, ts: r.a.ts, temps: r.a.ts - v.depart }));
-}
-function tablePodium(vagueId) {
-  const all = podiumDe(vagueId), rows = all.slice(0, 4);
-  const total = coureursDeVague(vagueId).length;
+const PODIUM_N = 4;   // nombre de places affichées sur chaque podium (Élite et Sport pour tous)
+function tablePodium(vagueId, elite) {
+  const all = classementDe(vagueId, elite), rows = all.slice(0, PODIUM_N);
+  const total = coureursDeVague(vagueId).filter(c => !!c.elite === elite).length;
   const head = `<p class="hint">${all.length} arrivé(s) sur ${total} inscrit(s)</p>`;
   if (!rows.length) return head + '<p class="hint">Aucun classement pour l\'instant.</p>';
   const medal = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-  return head + '<table><thead><tr><th>Rang</th><th>Dossard</th><th>Nom complet</th><th>Sous-catégorie</th><th>Établissement</th><th>Temps</th></tr></thead><tbody>' +
-    rows.map((r, i) => `<tr><td><b>${medal(i)} ${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td>${r.c.elite ? '<span class="badge elite">⭐ Élite</span>' : '<span class="badge">Sport pour tous</span>'}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
+  return head + '<table><thead><tr><th>Rang</th><th>Dossard</th><th>Nom complet</th><th>Établissement</th><th>Temps</th></tr></thead><tbody>' +
+    rows.map((r, i) => `<tr><td><b>${medal(i)} ${i + 1}</b></td><td>#${r.c.dossard}</td><td dir="auto">${escapeHtml(r.c.nomComplet)}</td><td dir="auto">${escapeHtml(r.c.etablissement || '')}</td><td>${fmtTime(r.temps)}</td></tr>`).join('') + '</tbody></table>';
 }
 function renderClassements() {
   renderRapportSelect();
   const sel = document.getElementById('clas-vague'), cur = sel.value;
   sel.innerHTML = DB.vagues.map(v => `<option value="${v.id}">${escapeHtml(v.nom)}</option>`).join('');
   if (cur && DB.vagues.some(v => v.id === cur)) sel.value = cur;
-  if (!DB.vagues.length) { document.getElementById('clas-podium').innerHTML = document.getElementById('clas-elite').innerHTML = document.getElementById('clas-spt').innerHTML = '<p class="hint">Définissez l\'année limite.</p>'; return; }
+  if (!DB.vagues.length) { ['clas-podium-elite','clas-podium-spt','clas-elite','clas-spt'].forEach(id => document.getElementById(id).innerHTML = '<p class="hint">Définissez l\'année limite.</p>'); return; }
   const v = DB.vagues.find(x => x.id === sel.value) || DB.vagues[0];
   document.getElementById('clas-summary').textContent = v.depart ? `Départ réel : ${fmtClock(v.depart)}` + (v.fin ? ` · 🏁 Terminée à ${fmtClock(v.fin)} (durée ${fmtTime(v.fin - v.depart)})` : ' · en cours') : 'Course non partie.';
-  document.getElementById('clas-podium').innerHTML = tablePodium(v.id);
+  document.querySelectorAll('.podium-n').forEach(e => e.textContent = PODIUM_N);
+  document.getElementById('clas-podium-elite').innerHTML = tablePodium(v.id, true);
+  document.getElementById('clas-podium-spt').innerHTML = tablePodium(v.id, false);
   document.getElementById('clas-elite').innerHTML = tableClassement(v.id, true);
   document.getElementById('clas-spt').innerHTML = tableClassement(v.id, false);
 }
@@ -2075,7 +2096,7 @@ function renderReportPage(vague, index, elite) {
 
   const catLabel = vague.nom.split(' — ')[0];                       // ex : "Catég. 4 (2014-2015)"
   const sexeAr   = vague.sexe === 'G' ? 'ذكور' : 'إناث';
-  const sousAr   = elite ? 'نخبة' : 'رياضة للجميع';
+  const sousAr   = elite ? 'نخبة' : 'لا منتمون';
   // <bdi dir="ltr"> : isole le libellé latin pour que parenthèses et années ne soient pas réordonnées dans le texte arabe
   const categorie = `<span>${sexeAr}</span> · <span>${sousAr}</span> · <bdi dir="ltr">${escapeHtml(catLabel)}</bdi>`;
 
