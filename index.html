@@ -485,7 +485,11 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
     <div id="video-wrap"><video id="video" playsinline muted></video></div>
     <canvas id="scan-canvas" style="display:none;"></canvas>
     <div id="last-arrival">En attente de la première arrivée…</div>
-    <h3>Arrivées enregistrées (<span id="arrivees-count">0</span>)</h3>
+    <div class="row" style="align-items:flex-end;">
+      <div class="field"><label>Liste de la course</label><select id="arrivees-vague" onchange="arrVagueSel=this.value;renderArrivees()"></select></div>
+      <button id="btn-nettoyer-liste" style="display:none;" onclick="nettoyerListeArrivees()" title="Vide cette liste ; les arrivées restent dans Classements">🧹 Nettoyer la liste</button>
+    </div>
+    <h3>Arrivées — <span id="arrivees-course-lib">—</span> (<span id="arrivees-count">0</span>)</h3>
     <p id="arrivees-masquees" class="hint"></p>
     <div class="scroll"><table>
       <thead><tr><th>Heure</th><th>Dossard</th><th>Nom complet</th><th>Course</th><th>Temps</th><th>Saisie</th><th></th></tr></thead>
@@ -1815,17 +1819,23 @@ function rouvrirCourse(id) {
   if (!confirm('Rouvrir cette course ? Le chrono reprend et les arrivées peuvent de nouveau être enregistrées.')) return;
   v.fin = null; v.listeNettoyee = false; saveDB(); renderAll();
 }
-// Nettoyage de la liste « Arrivées enregistrées » d'une course terminée : affichage seulement,
-// les arrivées restent dans DB.arrivees (classements, rapport, sauvegarde, export CSV inchangés)
-function nettoyerListeArrivees(id) {
-  const v = DB.vagues.find(x => x.id === id); if (!v || !v.fin) return;
-  const n = nbArriveesVague(id);
-  if (!confirm(`Nettoyer la liste des arrivées de « ${v.nom} » ?\n\n${n} arrivée(s) seront retirées de cette liste.\nElles restent enregistrées et visibles dans l'onglet Classements (vous pouvez aussi les réafficher ici).`)) return;
+// Liste des arrivées : une liste par course (vague). Nettoyer = vider l'affichage de la liste de CETTE course terminée
+// pour repartir à vide sur la suivante ; les arrivées restent dans DB.arrivees (Classements, rapport, CSV, sauvegarde inchangés)
+let arrVagueSel = 'auto';
+function vagueAffichee() {
+  if (arrVagueSel !== 'auto') { const v = DB.vagues.find(x => x.id === arrVagueSel); if (v) return v; }
+  const enCours = DB.vagues.find(v => v.depart && !v.fin); if (enCours) return enCours;
+  return DB.vagues.filter(v => v.depart).sort((a, b) => b.depart - a.depart)[0] || null;
+}
+function nettoyerListeArrivees() {
+  const v = vagueAffichee(); if (!v || !v.fin) return;
+  const n = nbArriveesVague(v.id);
+  if (!confirm(`Nettoyer la liste des arrivées de « ${v.nom} » ?\n\n${n} arrivée(s) seront retirées de cette liste.\nElles restent enregistrées et visibles dans l'onglet Classements (vous pourrez aussi les réafficher ici).`)) return;
   v.listeNettoyee = true; saveDB(); renderCourse();
   showToast(`🧹 Liste nettoyée : ${v.nom} (données conservées)`);
 }
-function reafficherListeArrivees(id) {
-  const v = DB.vagues.find(x => x.id === id); if (!v) return;
+function reafficherListeArrivees() {
+  const v = vagueAffichee(); if (!v) return;
   v.listeNettoyee = false; saveDB(); renderCourse();
 }
 function chronoHtml(v) {
@@ -1842,9 +1852,7 @@ function renderCourse() {
         const ins = coureursDeVague(v.id), arr = nbArriveesVague(v.id);
         const etat = !v.depart ? '<span class="badge">Non parti</span>' : v.fin ? `<span class="badge warn">🏁 Terminée à ${fmtClock(v.fin)}</span>` : '<span class="badge ok">En cours</span>';
         const action = !v.depart ? `<button class="go" onclick="topDepart('${v.id}')">🚦 Top départ</button>`
-          : v.fin ? `<button class="secondary small" onclick="rouvrirCourse('${v.id}')">Rouvrir</button> ` + (v.listeNettoyee
-            ? `<button class="secondary small" onclick="reafficherListeArrivees('${v.id}')" title="Remettre les arrivées de cette course dans la liste">👁 Réafficher</button>`
-            : `<button class="small" onclick="nettoyerListeArrivees('${v.id}')" title="Retire les arrivées de la liste ci-dessous ; elles restent dans Classements">🧹 Nettoyer</button>`)
+          : v.fin ? `<button class="secondary small" onclick="rouvrirCourse('${v.id}')">Rouvrir</button>`
           : `<button onclick="terminerCourse('${v.id}')">🏁 Terminée</button>` + (arr === 0 ? ` <button class="secondary small" onclick="annulerDepart('${v.id}')" title="Top départ lancé par erreur">Annuler</button>` : '');
         return `<tr><td>${escapeHtml(v.nom)}</td><td>${v.heure || '—'}</td><td>${ins.length}</td><td>${arr}</td>
           <td>${v.depart ? `<span class="badge ok">${fmtClock(v.depart)}</span>` : '—'}</td><td>${chronoHtml(v)}</td><td>${etat}</td><td>${action}</td></tr>`;
@@ -1929,14 +1937,28 @@ function supprimerArrivee(code) {
   if (monRole === 'arrivee') marquerArrChange();
   saveDB(); renderCourse();
 }
-function arriveeMasquee(a) { const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null; return !!(v && v.listeNettoyee); }
 function renderArrivees() {
-  const visibles = DB.arrivees.filter(a => !arriveeMasquee(a)), nbMasq = DB.arrivees.length - visibles.length;
-  document.getElementById('arrivees-count').textContent = visibles.length;
+  const v = vagueAffichee();
+  // sélecteur de course (Automatique = course en cours, sinon la dernière partie)
+  const sel = document.getElementById('arrivees-vague');
+  if (sel) {
+    sel.innerHTML = '<option value="auto">Automatique (course en cours)</option>' + DB.vagues.map(x => `<option value="${x.id}">${escapeHtml(x.nom)}</option>`).join('');
+    sel.value = (arrVagueSel !== 'auto' && DB.vagues.some(x => x.id === arrVagueSel)) ? arrVagueSel : 'auto';
+  }
+  const lib = document.getElementById('arrivees-course-lib');
+  if (lib) lib.textContent = v ? v.nom + (v.fin ? ' · 🏁 terminée' : v.depart ? ' · en cours' : ' · non partie') : '—';
+  const nbTot = v ? nbArriveesVague(v.id) : 0;
+  const masquee = !!(v && v.listeNettoyee);
+  const rows = (v && !masquee) ? DB.arrivees.filter(a => { const c = findByCode(a.codeMassar); return c && vagueIdOf(c) === v.id; }) : [];
+  document.getElementById('arrivees-count').textContent = rows.length;
+  const btn = document.getElementById('btn-nettoyer-liste');
+  if (btn) btn.style.display = (v && v.fin && !masquee && monRole !== 'arrivee') ? '' : 'none';
   const mh = document.getElementById('arrivees-masquees');
-  if (mh) mh.textContent = nbMasq ? `🧹 ${nbMasq} arrivée(s) de courses nettoyées masquée(s) — toujours enregistrées et visibles dans Classements.` : '';
-  document.getElementById('arrivees-tbody').innerHTML = visibles.sort((a, b) => a.ts - b.ts).map(a => {
-    const c = findByCode(a.codeMassar), v = c ? vagueOf(c) : null;
+  if (mh) mh.innerHTML = masquee
+    ? `🧹 Liste nettoyée : ${nbTot} arrivée(s) conservée(s), visibles dans <b>Classements</b>. ` + (monRole !== 'arrivee' ? '<button class="secondary small" onclick="reafficherListeArrivees()">👁 Réafficher</button>' : '')
+    : '';
+  document.getElementById('arrivees-tbody').innerHTML = rows.sort((a, b) => a.ts - b.ts).map(a => {
+    const c = findByCode(a.codeMassar);
     return `<tr><td>${fmtClock(a.ts)}</td><td>${c ? '#' + c.dossard : '?'}</td><td dir="auto">${c ? escapeHtml(c.nomComplet) : escapeHtml(a.codeMassar)}</td>
       <td>${v ? escapeHtml(v.nom) : '—'}</td><td>${v && v.depart ? fmtTime(a.ts - v.depart) : '—'}</td><td>${a.source}</td>
       <td>${(monRole === 'arrivee' && a.session !== (maSession && maSession.id)) ? '' : `<button class="danger small" onclick="supprimerArrivee('${a.codeMassar}')">✕</button>`}</td></tr>`;
