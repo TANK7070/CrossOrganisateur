@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartCross - Organisateur v2.029</title>
+<title>SmartCross - Organisateur v2.031</title>
 <link rel="icon" type="image/x-icon" href="https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/smartcrossico.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -260,14 +260,14 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 
 .rep-header { position:relative; text-align:center; margin-bottom:6px; }
 .rep-logo-aref { position:absolute; top:0; right:0; max-height:64px; max-width:105px; object-fit:contain; }
-.rep-logo-min  { max-height:60px; max-width:160px; object-fit:contain; display:block; margin:0 auto 4px; }
-.rep-titre-ar  { font-size:21px; font-weight:800; color:#111827; }
-.rep-subline   { display:flex; justify-content:space-between; align-items:center; font-size:14px; color:#374151; padding:0 8px; margin-top:4px; }
-.rep-subline .rep-locale b { color:#065f46; }
+.rep-logo-min  { height:50px; width:auto; object-fit:contain; display:block; margin:0 auto 4px; }
+.rep-titre-ar  { font-size:20px; font-weight:700; color:#000000; }
+.rep-subline   { display:flex; justify-content:space-between; align-items:center; font-size:14px; color:#000000; padding:0 8px; margin-top:4px; }
+.rep-subline .rep-locale b { color:#000000; }
 
 .rep-main-title {
-  text-align:center; font-size:20px; font-weight:800;
-  margin:10px 0 8px; border-bottom:2px solid #111827; padding-bottom:4px;
+  text-align:center; font-size:15px; font-weight:600;
+  margin:5px 0 8px; border-bottom:2px solid #000000; padding-bottom:4px;
 }
 
 /* Bandeau : numéro, heure, distance, catégorie */
@@ -301,12 +301,12 @@ th.sortable.desc::after { content:'▼'; opacity:1; color:#2563eb; }
 .rep-eq tr    { height:30px; }
 
 .rep-signature {
-  margin-top:auto; padding-top:18px;
+  margin-top:5px; padding-top:18px;
   text-align:center; font-size:14px; font-weight:600; color:#374151;
 }
 .rep-signature .rep-sig-line {
   display:inline-block; border-top:1px solid #374151;
-  padding-top:4px; min-width:200px; margin-top:36px;
+  padding-top:4px; min-width:200px; margin-top:5px; margin-bottom: 30px;
 }
 
 </style>
@@ -653,7 +653,7 @@ if (isDirty()) dirtySince = DB.majLe;
 function majIndicateurSauvegarde() {
   const btn = document.getElementById('btn-save'), st = document.getElementById('save-status'), bn = document.getElementById('save-banner');
   if (!btn) return;
-  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.029'; return; }
+  if (monRole === 'arrivee') { bn.style.display = 'none'; majIndicateurArrivees(); document.title = (isDirty() ? '● ' : '') + 'SmartCross - Organisateur v2.031'; return; }
   const dirty = isDirty();
   btn.classList.toggle('dirty', dirty);
   const sy = getSync();
@@ -667,7 +667,7 @@ function majIndicateurSauvegarde() {
     bn.innerHTML = `⚠️ Modifications non sauvegardées depuis ${min} min <button onclick="sauvegarderOrganisateur()">💾 Sauvegarder maintenant</button>`;
     bn.style.display = 'block';
   } else bn.style.display = 'none';
-  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.029';
+  document.title = (dirty ? '● ' : '') + 'SmartCross - Organisateur v2.031';
 }
 setInterval(majIndicateurSauvegarde, 30000);
 window.addEventListener('beforeunload', e => { if (!quitterSansAlerte && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -2037,8 +2037,35 @@ function exportClassementsCSV() {
 }
 
 /* ===================== RAPPORT TECHNIQUE (PDF) ===================== */
-const LOGO_MIN_URL  = 'https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/logo-ministere.png';
+const LOGO_MIN_URL  = 'https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/logo-ministere-2.png';
 const LOGO_AREF_URL = 'https://taoufikeps.wordpress.com/wp-content/uploads/2026/10/logo-frmss.png';
+// Si besoin, coller ici les logos en base64 (data:image/png;base64,...) : ils seront utilisés en priorité, sans réseau
+const LOGO_MIN_DATA  = '';
+const LOGO_AREF_DATA = '';
+const LOGOS = { min: LOGO_MIN_DATA || null, aref: LOGO_AREF_DATA || null };
+
+// Télécharge une image et la convertit en data URL (évite tout problème CORS/canvas dans html2canvas).
+// Essaie l'adresse d'origine, puis deux relais publics qui renvoient des en-têtes CORS.
+async function imageEnDataURL(url) {
+  const sansProto = url.replace(/^https?:\/\//, '');
+  const candidats = [url, 'https://i0.wp.com/' + sansProto, 'https://images.weserv.nl/?url=' + encodeURIComponent(sansProto)];
+  for (const u of candidats) {
+    try {
+      const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 6000);
+      const r = await fetch(u, { mode: 'cors', signal: ctrl.signal }); clearTimeout(t);
+      if (!r.ok) continue;
+      const blob = await r.blob();
+      if (!blob.type.startsWith('image/')) continue;
+      return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+    } catch (e) { /* source suivante */ }
+  }
+  return null;
+}
+async function chargerLogos() {
+  if (!LOGOS.min)  LOGOS.min  = await imageEnDataURL(LOGO_MIN_URL);
+  if (!LOGOS.aref) LOGOS.aref = await imageEnDataURL(LOGO_AREF_URL);
+  return !!(LOGOS.min && LOGOS.aref);
+}
 
 // Classement par équipes d'une (vague, sous-catégorie) : somme des places des N premiers
 function classementEquipes(vagueId, elite) {
@@ -2098,7 +2125,7 @@ function renderReportPage(vague, index, elite) {
   const sexeAr   = vague.sexe === 'G' ? 'ذكور' : 'إناث';
   const sousAr   = elite ? 'نخبة' : 'لا منتمون';
   // <bdi dir="ltr"> : isole le libellé latin pour que parenthèses et années ne soient pas réordonnées dans le texte arabe
-  const categorie = `<span>${sexeAr}</span> · <span>${sousAr}</span> · <bdi dir="ltr">${escapeHtml(catLabel)}</bdi>`;
+  const categorie = `<span>${sousAr}</span> / <span>${sexeAr}</span> / <bdi dir="ltr">${escapeHtml(catLabel)}</bdi>`;
 
   // Heure : heure prévue saisie dans les paramètres des courses (pas le départ réel)
   const heure = /^\d{1,2}:\d{2}/.test(vague.heure || '') ? String(vague.heure).slice(0, 5) : (vague.heure || '—');
@@ -2147,13 +2174,12 @@ function renderReportPage(vague, index, elite) {
 
   return `
     <div class="rep-header">
-      <img class="rep-logo-aref" src="${LOGO_AREF_URL}" alt="" crossorigin="anonymous">
+      ${LOGOS.aref ? `<img class="rep-logo-aref" src="${LOGOS.aref}" alt="">` : ''}
       <div class="rep-header-center">
-        <img class="rep-logo-min" src="${LOGO_MIN_URL}" alt="" crossorigin="anonymous">
+        ${LOGOS.min ? `<img class="rep-logo-min" src="${LOGOS.min}" alt="">` : ''}
         <div class="rep-titre-ar">${escapeHtml(DB.course.titreAr || 'البطولة الإقليمية للعدو الريفي')}</div>
         <div class="rep-subline">
-          <span dir="ltr">${escapeHtml(fmtDateRapport(DB.course.date))}</span>
-          <span class="rep-locale"><b>المكان : </b>${escapeHtml(DB.course.locale || '')}</span>
+          <span dir="ltr"><b>التاريخ : </b>${escapeHtml(fmtDateRapport(DB.course.date))} / <b> مديرية : </b>${escapeHtml(ville)} / <b>مضمار : </b>${escapeHtml(DB.course.locale || '')} </span>
         </div>
       </div>
     </div>
@@ -2260,6 +2286,9 @@ async function generateRapportTechniquePDF() {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const stage = document.getElementById('pdf-stage');
 
+  Progress.show('Chargement des logos…');
+  const logosOk = await chargerLogos();
+  if (!logosOk) showToast('⚠️ Logo(s) introuvable(s) : rapport généré sans (voir console)');
   Progress.show(`Génération du rapport (${jobs.length} pages)…`);
   try {
     for (let p = 0; p < jobs.length; p++) {
